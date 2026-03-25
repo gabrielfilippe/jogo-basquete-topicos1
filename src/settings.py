@@ -5,6 +5,12 @@ SCREEN_HEIGHT = 576
 FPS = 60
 WINDOW_TITLE = "Lances Livres - Topicos 1"
 
+# Background opcional por imagem (baseado na referencia da quadra).
+USE_BACKGROUND_IMAGE = True
+BACKGROUND_IMAGE_PATH = "assets/quadrabasquete.png"
+SHOW_HOOP_OVERLAY_ON_PHOTO = False
+SHOW_PLAYER_SILHOUETTE_ON_PHOTO = False
+
 # Parametros de gameplay (parte 1)
 BALL_RADIUS = 12
 BALL_START_X = 190
@@ -21,18 +27,28 @@ POWER_MAX = 950.0
 POWER_DEFAULT = 680.0
 POWER_STEP = 18.0
 
+# Forca variavel por tempo segurando espaco
+THROW_FORCE_MIN = 350.0
+THROW_FORCE_MAX = 950.0
+THROW_CHARGE_MAX_MS = 1200
+
+# Ajuste de forca por arrasto do mouse
+DRAG_MIN_DISTANCE_PX = 14.0
+DRAG_MAX_DISTANCE_PX = 260.0
+DRAG_START_TOLERANCE_PX = 24.0
+
 MAX_ATTEMPTS = 10
 
 # Aro e tabela (coordenadas em pixels)
-RIM_Y = 290
-RIM_LEFT_X = 862
-RIM_RIGHT_X = 898
+RIM_Y = 191
+RIM_LEFT_X = 828
+RIM_RIGHT_X = 862
 RIM_NODE_RADIUS = 7
 
-BACKBOARD_X = 910
-BACKBOARD_Y = 220
-BACKBOARD_WIDTH = 12
-BACKBOARD_HEIGHT = 95
+BACKBOARD_X = 875
+BACKBOARD_Y = 64
+BACKBOARD_WIDTH = 10
+BACKBOARD_HEIGHT = 150
 
 # Colisao/restituicao
 RIM_BOUNCE = 0.7

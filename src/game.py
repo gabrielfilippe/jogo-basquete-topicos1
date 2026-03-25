@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import sys
+from pathlib import Path
 
 import pygame
 
@@ -23,6 +24,7 @@ class FreeThrowGame:
         self.font = pygame.font.SysFont("consolas", 24)
         self.small_font = pygame.font.SysFont("consolas", 18)
         self.running = True
+        self.using_photo_background = False
         self.static_background = self._build_static_background()
 
         self.ball_pos = pygame.Vector2(settings.BALL_START_X, settings.BALL_START_Y)
@@ -33,7 +35,9 @@ class FreeThrowGame:
         self.floor_bounces = 0
 
         self.angle_deg = settings.ANGLE_DEFAULT
-        self.power = settings.POWER_DEFAULT
+        self.dragging_shot = False
+        self.drag_current_pos = pygame.Vector2(self.ball_pos)
+        self.current_throw_force = settings.THROW_FORCE_MIN
 
         self.score = 0
         self.attempts_used = 0
@@ -62,17 +66,20 @@ class FreeThrowGame:
             if event.type == pygame.QUIT:
                 self.running = False
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    self._try_launch_ball()
                 if event.key == pygame.K_r:
                     self._reset_ball()
                 if event.key == pygame.K_n:
                     self._new_session()
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                self._start_drag_shot(event.pos)
+            if event.type == pygame.MOUSEMOTION:
+                self._update_drag_shot(event.pos)
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                self._release_drag_shot(event.pos)
 
     def _update(self, dt: float) -> None:
         self._update_status_timer(dt)
         self._update_feedback_flash_timer(dt)
-        self._update_aim_controls()
 
         if not self.ball_in_flight:
             return
@@ -82,9 +89,10 @@ class FreeThrowGame:
         self.ball_vel.y += settings.GRAVITY * dt
         self.ball_pos += self.ball_vel * dt
 
+        # Valida cesta antes das colisoes para evitar rejeicao indevida no aro.
+        self._check_made_basket(prev_pos)
         self._resolve_hoop_collisions()
         self._resolve_floor_collision()
-        self._check_made_basket(prev_pos)
 
         if self._should_end_shot():
             self._finalize_shot(auto_miss=not self.shot_scored)
@@ -93,37 +101,86 @@ class FreeThrowGame:
         if self._is_ball_out_of_bounds():
             self._finalize_shot(auto_miss=not self.shot_scored)
 
-    def _update_aim_controls(self) -> None:
-        if self.ball_in_flight:
-            return
-
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_UP]:
-            self.angle_deg = min(settings.ANGLE_MAX, self.angle_deg + settings.ANGLE_STEP)
-        if keys[pygame.K_DOWN]:
-            self.angle_deg = max(settings.ANGLE_MIN, self.angle_deg - settings.ANGLE_STEP)
-        if keys[pygame.K_RIGHT]:
-            self.power = min(settings.POWER_MAX, self.power + settings.POWER_STEP)
-        if keys[pygame.K_LEFT]:
-            self.power = max(settings.POWER_MIN, self.power - settings.POWER_STEP)
-
-    def _try_launch_ball(self) -> None:
+    def _start_drag_shot(self, mouse_pos: tuple[int, int]) -> None:
         if self.ball_in_flight:
             return
         if self.attempts_used >= settings.MAX_ATTEMPTS:
             self._set_status("Sem tentativas. Pressione N para novo jogo.", settings.COLOR_ACCENT, 2.0)
             return
+        if self.dragging_shot:
+            return
+
+        click_pos = pygame.Vector2(mouse_pos)
+        if click_pos.distance_to(self.ball_pos) > settings.BALL_RADIUS + settings.DRAG_START_TOLERANCE_PX:
+            return
+
+        self.dragging_shot = True
+        self.drag_current_pos.update(click_pos)
+        self.current_throw_force = settings.THROW_FORCE_MIN
+        self._update_drag_aim_and_force()
+
+    def _update_drag_shot(self, mouse_pos: tuple[int, int]) -> None:
+        if not self.dragging_shot:
+            return
+        if self.ball_in_flight:
+            self._cancel_drag_shot()
+            return
+        self.drag_current_pos.update(mouse_pos)
+        self._update_drag_aim_and_force()
+
+    def _update_drag_aim_and_force(self) -> None:
+        drag_vec = self.drag_current_pos - self.ball_pos
+        drag_distance = drag_vec.length()
+        if drag_distance <= 0.0001:
+            return
+
+        # Usa o vetor de arrasto para definir direcao de arremesso.
+        dy_up = -drag_vec.y
+        angle_deg = math.degrees(math.atan2(dy_up, drag_vec.x))
+        self.angle_deg = max(settings.ANGLE_MIN, min(settings.ANGLE_MAX, angle_deg))
+
+        t = drag_distance / settings.DRAG_MAX_DISTANCE_PX
+        t = max(0.0, min(1.0, t))
+        self.current_throw_force = (
+            settings.THROW_FORCE_MIN
+            + t * (settings.THROW_FORCE_MAX - settings.THROW_FORCE_MIN)
+        )
+
+    def _release_drag_shot(self, mouse_pos: tuple[int, int]) -> None:
+        if not self.dragging_shot:
+            return
+        self.drag_current_pos.update(mouse_pos)
+        self._update_drag_aim_and_force()
+
+        drag_vec = self.drag_current_pos - self.ball_pos
+        if drag_vec.length() < settings.DRAG_MIN_DISTANCE_PX:
+            self._cancel_drag_shot()
+            return
+        if self.ball_in_flight:
+            self._cancel_drag_shot()
+            return
+        if self.attempts_used >= settings.MAX_ATTEMPTS:
+            self._cancel_drag_shot()
+            self._set_status("Sem tentativas. Pressione N para novo jogo.", settings.COLOR_ACCENT, 2.0)
+            return
 
         angle_rad = math.radians(self.angle_deg)
-        self.ball_vel.x = math.cos(angle_rad) * self.power
-        self.ball_vel.y = -math.sin(angle_rad) * self.power
+        self.ball_vel.x = math.cos(angle_rad) * self.current_throw_force
+        self.ball_vel.y = -math.sin(angle_rad) * self.current_throw_force
         self.ball_in_flight = True
         self.shot_scored = False
         self.shot_time = 0.0
         self.floor_bounces = 0
         self.attempts_used += 1
+        self.dragging_shot = False
+
+    def _cancel_drag_shot(self) -> None:
+        self.dragging_shot = False
+        self.drag_current_pos.update(self.ball_pos)
+        self.current_throw_force = settings.THROW_FORCE_MIN
 
     def _reset_ball(self) -> None:
+        self._cancel_drag_shot()
         self.ball_pos.update(settings.BALL_START_X, settings.BALL_START_Y)
         self.ball_vel.update(0, 0)
         self.ball_in_flight = False
@@ -157,12 +214,30 @@ class FreeThrowGame:
         self.status_timer = duration
 
     def _resolve_hoop_collisions(self) -> None:
+        if self._is_descending_through_rim_channel():
+            return
+        if self.shot_scored and self.ball_vel.y > 0 and self.ball_pos.y >= settings.RIM_Y - settings.BALL_RADIUS:
+            return
+
         left_rim = pygame.Vector2(settings.RIM_LEFT_X, settings.RIM_Y)
         right_rim = pygame.Vector2(settings.RIM_RIGHT_X, settings.RIM_Y)
 
         self._resolve_circle_collision(left_rim, settings.RIM_NODE_RADIUS, settings.RIM_BOUNCE)
         self._resolve_circle_collision(right_rim, settings.RIM_NODE_RADIUS, settings.RIM_BOUNCE)
         self._resolve_backboard_collision()
+
+    def _is_descending_through_rim_channel(self) -> bool:
+        if self.ball_vel.y <= 0:
+            return False
+
+        inner_left = settings.RIM_LEFT_X + settings.BALL_RADIUS * 0.2
+        inner_right = settings.RIM_RIGHT_X - settings.BALL_RADIUS * 0.2
+        in_channel_x = inner_left <= self.ball_pos.x <= inner_right
+
+        rim_top = settings.RIM_Y - settings.BALL_RADIUS * 0.9
+        rim_bottom = settings.RIM_Y + settings.BALL_RADIUS * 2.4
+        near_rim_y = rim_top <= self.ball_pos.y <= rim_bottom
+        return in_channel_x and near_rim_y
 
     def _resolve_floor_collision(self) -> None:
         floor_level = settings.FLOOR_Y - settings.BALL_RADIUS
@@ -285,15 +360,36 @@ class FreeThrowGame:
 
     def _draw(self) -> None:
         self.screen.blit(self.static_background, (0, 0))
-        self._draw_court()
+        if self.using_photo_background:
+            if settings.SHOW_HOOP_OVERLAY_ON_PHOTO:
+                self._draw_hoop()
+            if settings.SHOW_PLAYER_SILHOUETTE_ON_PHOTO:
+                self._draw_player_silhouette()
+        else:
+            self._draw_court()
+            self._draw_player_silhouette()
         self._draw_aim_preview()
         self._draw_ball()
         self._draw_feedback_flash()
-        self._draw_player_silhouette()
         self._draw_ui()
         self._draw_round_end_overlay()
 
     def _build_static_background(self) -> pygame.Surface:
+        if settings.USE_BACKGROUND_IMAGE:
+            image_path = Path(__file__).resolve().parents[1] / settings.BACKGROUND_IMAGE_PATH
+            if image_path.exists():
+                try:
+                    loaded = pygame.image.load(str(image_path)).convert()
+                    scaled = pygame.transform.smoothscale(
+                        loaded,
+                        (settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT),
+                    )
+                    self.using_photo_background = True
+                    return scaled
+                except pygame.error:
+                    self.using_photo_background = False
+
+        self.using_photo_background = False
         surface = pygame.Surface((settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT))
         self._draw_sky_gradient(surface)
         self._draw_sun_glow(surface)
@@ -627,48 +723,96 @@ class FreeThrowGame:
         if self.ball_in_flight:
             return
 
+        if not self.dragging_shot:
+            return
+
         angle_rad = math.radians(self.angle_deg)
         direction = pygame.Vector2(math.cos(angle_rad), -math.sin(angle_rad))
 
         start = self.ball_pos
         end = start + direction * 80
         pygame.draw.line(self.screen, settings.COLOR_ACCENT, start, end, 3)
+        pygame.draw.line(self.screen, (210, 210, 210), self.ball_pos, self.drag_current_pos, 2)
 
+        self._draw_preview_dots(direction, self.current_throw_force, settings.COLOR_LINES)
+
+    def _draw_preview_dots(
+        self,
+        direction: pygame.Vector2,
+        throw_force: float,
+        color: tuple[int, int, int],
+    ) -> None:
         # Pontos da trajetoria aproximada para facilitar calibracao do arremesso.
         sim_pos = pygame.Vector2(self.ball_pos)
-        sim_vel = direction * self.power
+        sim_vel = direction * throw_force
         step_dt = 0.08
         for _ in range(14):
             sim_vel.y += settings.GRAVITY * step_dt
             sim_pos += sim_vel * step_dt
-            pygame.draw.circle(self.screen, settings.COLOR_LINES, sim_pos, 3)
+            pygame.draw.circle(self.screen, color, sim_pos, 3)
 
     def _draw_ui(self) -> None:
-        message = "Setas: angulo/forca | ESPACO: arremessar | R: resetar bola | N: novo jogo"
+        message = "Clique na bola, arraste para mirar/forca e solte para arremessar"
         text_surface = self.font.render(message, True, settings.COLOR_TEXT)
         self.screen.blit(text_surface, (24, 24))
 
-        stats = f"Angulo: {self.angle_deg:.1f} deg  |  Forca: {self.power:.0f}"
+        secondary = "R: resetar bola | N: novo jogo"
+        secondary_surface = self.small_font.render(secondary, True, settings.COLOR_TEXT)
+        self.screen.blit(secondary_surface, (24, 58))
+
+        stats = f"Angulo: {self.angle_deg:.1f} deg  |  Forca atual: {self.current_throw_force:.0f}"
         stats_surface = self.small_font.render(stats, True, settings.COLOR_TEXT)
-        self.screen.blit(stats_surface, (24, 58))
+        self.screen.blit(stats_surface, (24, 84))
 
         attempts_left = settings.MAX_ATTEMPTS - self.attempts_used
         score_text = f"Placar: {self.score}  |  Tentativas: {self.attempts_used}/{settings.MAX_ATTEMPTS}"
         score_surface = self.small_font.render(score_text, True, settings.COLOR_TEXT)
-        self.screen.blit(score_surface, (24, 86))
+        self.screen.blit(score_surface, (24, 110))
 
         if not self.ball_in_flight:
             if attempts_left > 0:
-                hint = "Ajuste e pressione ESPACO para lancar"
+                hint = "Arraste mais longe para aumentar forca"
             else:
                 hint = "Fim das tentativas. Pressione N para recomecar"
             hint_surface = self.small_font.render(hint, True, settings.COLOR_ACCENT)
-            self.screen.blit(hint_surface, (24, 114))
+            self.screen.blit(hint_surface, (24, 136))
+
+        self._draw_force_bar()
 
         if self.status_timer > 0.0:
             status_surface = self.font.render(self.status_text, True, self.status_color)
             status_x = settings.SCREEN_WIDTH // 2 - status_surface.get_width() // 2
             self.screen.blit(status_surface, (status_x, 150))
+
+    def _draw_force_bar(self) -> None:
+        if not self.dragging_shot:
+            return
+
+        bar_x = 24
+        bar_y = 168
+        bar_w = 320
+        bar_h = 18
+
+        pct = (self.current_throw_force - settings.THROW_FORCE_MIN) / (
+            settings.THROW_FORCE_MAX - settings.THROW_FORCE_MIN
+        )
+        pct = max(0.0, min(1.0, pct))
+
+        pygame.draw.rect(self.screen, (30, 36, 48), (bar_x, bar_y, bar_w, bar_h), border_radius=4)
+        pygame.draw.rect(self.screen, settings.COLOR_LINES, (bar_x, bar_y, bar_w, bar_h), width=2, border_radius=4)
+
+        fill_w = int((bar_w - 4) * pct)
+        if fill_w > 0:
+            pygame.draw.rect(
+                self.screen,
+                settings.COLOR_ACCENT,
+                (bar_x + 2, bar_y + 2, fill_w, bar_h - 4),
+                border_radius=3,
+            )
+
+        label = f"Forca: {self.current_throw_force:.0f}"
+        label_surface = self.small_font.render(label, True, settings.COLOR_TEXT)
+        self.screen.blit(label_surface, (bar_x + bar_w + 12, bar_y - 1))
 
     def _draw_round_end_overlay(self) -> None:
         if self.attempts_used < settings.MAX_ATTEMPTS:
