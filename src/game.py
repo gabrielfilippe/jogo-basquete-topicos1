@@ -26,8 +26,9 @@ class FreeThrowGame:
         self.running = True
         self.using_photo_background = False
         self.static_background = self._build_static_background()
+        ball_rest_pos = self._get_ball_rest_position()
 
-        self.ball_pos = pygame.Vector2(settings.BALL_START_X, settings.BALL_START_Y)
+        self.ball_pos = pygame.Vector2(ball_rest_pos)
         self.ball_vel = pygame.Vector2(0, 0)
         self.ball_in_flight = False
         self.shot_scored = False
@@ -48,6 +49,10 @@ class FreeThrowGame:
 
         self.feedback_flash_timer = 0.0
         self.feedback_flash_color = settings.COLOR_SUCCESS
+        self.throw_frames = self._load_throw_frames()
+        self.throw_anim_active = False
+        self.throw_anim_time = 0.0
+        self.throw_anim_frame_index = 0
 
     def run(self) -> None:
         """Executa o loop principal."""
@@ -80,6 +85,7 @@ class FreeThrowGame:
     def _update(self, dt: float) -> None:
         self._update_status_timer(dt)
         self._update_feedback_flash_timer(dt)
+        self._update_throw_animation(dt)
 
         if not self.ball_in_flight:
             return
@@ -173,6 +179,7 @@ class FreeThrowGame:
         self.floor_bounces = 0
         self.attempts_used += 1
         self.dragging_shot = False
+        self._start_throw_animation()
 
     def _cancel_drag_shot(self) -> None:
         self.dragging_shot = False
@@ -181,7 +188,7 @@ class FreeThrowGame:
 
     def _reset_ball(self) -> None:
         self._cancel_drag_shot()
-        self.ball_pos.update(settings.BALL_START_X, settings.BALL_START_Y)
+        self.ball_pos.update(self._get_ball_rest_position())
         self.ball_vel.update(0, 0)
         self.ball_in_flight = False
         self.shot_scored = False
@@ -212,6 +219,32 @@ class FreeThrowGame:
         self.status_text = text
         self.status_color = color
         self.status_timer = duration
+
+    def _start_throw_animation(self) -> None:
+        if not self.throw_frames:
+            self.throw_anim_active = False
+            return
+        self.throw_anim_active = True
+        self.throw_anim_time = 0.0
+        self.throw_anim_frame_index = 0
+
+    def _update_throw_animation(self, dt: float) -> None:
+        if not self.throw_anim_active:
+            return
+
+        self.throw_anim_time += dt
+        frame_count = len(self.throw_frames)
+        total_duration = frame_count * settings.THROW_FRAME_DURATION
+
+        if self.throw_anim_time >= total_duration:
+            self.throw_anim_active = False
+            self.throw_anim_frame_index = frame_count - 1
+            return
+
+        self.throw_anim_frame_index = min(
+            frame_count - 1,
+            int(self.throw_anim_time / settings.THROW_FRAME_DURATION),
+        )
 
     def _resolve_hoop_collisions(self) -> None:
         if self._is_descending_through_rim_channel():
@@ -363,16 +396,68 @@ class FreeThrowGame:
         if self.using_photo_background:
             if settings.SHOW_HOOP_OVERLAY_ON_PHOTO:
                 self._draw_hoop()
-            if settings.SHOW_PLAYER_SILHOUETTE_ON_PHOTO:
-                self._draw_player_silhouette()
+            if settings.SHOW_PLAYER_SILHOUETTE_ON_PHOTO or self.throw_anim_active:
+                self._draw_player()
         else:
             self._draw_court()
-            self._draw_player_silhouette()
+            self._draw_player()
         self._draw_aim_preview()
         self._draw_ball()
         self._draw_feedback_flash()
         self._draw_ui()
         self._draw_round_end_overlay()
+
+    def _load_throw_frames(self) -> list[pygame.Surface]:
+        assets_dir = Path(__file__).resolve().parents[1] / "assets"
+        frame_paths = sorted(assets_dir.glob("processo*.png"), key=self._frame_sort_key)
+        if not frame_paths:
+            frame_paths = sorted(assets_dir.glob("arremesso*.png"), key=self._frame_sort_key)
+
+        frames: list[pygame.Surface] = []
+        for image_path in frame_paths:
+            try:
+                loaded = pygame.image.load(str(image_path)).convert_alpha()
+            except pygame.error:
+                continue
+
+            source_height = max(1, loaded.get_height())
+            scale = settings.THROW_IMAGE_HEIGHT / source_height
+            target_width = max(1, int(loaded.get_width() * scale))
+            frame = pygame.transform.smoothscale(loaded, (target_width, settings.THROW_IMAGE_HEIGHT))
+            frames.append(frame)
+
+        return frames
+
+    def _frame_sort_key(self, path: Path) -> tuple[int, str]:
+        stem = path.stem
+        trailing_digits = ""
+        for char in reversed(stem):
+            if not char.isdigit():
+                break
+            trailing_digits = char + trailing_digits
+
+        if trailing_digits:
+            return (int(trailing_digits), stem)
+        return (10**9, stem)
+
+    def _draw_player(self) -> None:
+        if self.throw_anim_active and self.throw_frames:
+            self._draw_throw_animation_frame()
+            return
+        self._draw_player_silhouette()
+
+    def _draw_throw_animation_frame(self) -> None:
+        if not self.throw_frames:
+            return
+
+        frame = self.throw_frames[self.throw_anim_frame_index]
+        base_x, base_y = self._get_player_base_position()
+        image_rect = frame.get_rect()
+        image_rect.midbottom = (
+            int(base_x + settings.THROW_IMAGE_OFFSET_X),
+            int(base_y + settings.THROW_IMAGE_OFFSET_Y),
+        )
+        self.screen.blit(frame, image_rect)
 
     def _build_static_background(self) -> pygame.Surface:
         if settings.USE_BACKGROUND_IMAGE:
@@ -654,8 +739,7 @@ class FreeThrowGame:
 
     def _draw_player_silhouette(self) -> None:
         # Silhueta simples para aproximar a composicao da cena de referencia.
-        base_x = settings.BALL_START_X - 56
-        base_y = 454
+        base_x, base_y = self._get_player_base_position()
 
         pygame.draw.ellipse(self.screen, (26, 34, 45), (base_x - 10, base_y + 30, 115, 25))
         pygame.draw.circle(self.screen, (38, 44, 59), (base_x + 54, base_y - 78), 14)
@@ -687,6 +771,16 @@ class FreeThrowGame:
             (33, 39, 52),
             [(base_x + 60, base_y + 6), (base_x + 74, base_y + 62), (base_x + 94, base_y + 60), (base_x + 72, base_y + 4)],
         )
+
+        # Marca visual da mao para reforcar a origem do arremesso.
+        hand_x, hand_y = self._get_ball_rest_position()
+        pygame.draw.circle(self.screen, (58, 64, 80), (int(hand_x), int(hand_y)), 6)
+
+    def _get_player_base_position(self) -> tuple[float, float]:
+        return (settings.BALL_START_X - 48, settings.BALL_START_Y + 16)
+
+    def _get_ball_rest_position(self) -> tuple[float, float]:
+        return (settings.BALL_START_X, settings.BALL_START_Y)
 
     def _draw_ball(self) -> None:
         pygame.draw.circle(
