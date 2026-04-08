@@ -30,9 +30,9 @@ python -m src.main
 - `assets/`: pasta para imagens, sons e fontes
 
 ## Controles (parte 1)
-- `Seta para cima/baixo`: ajusta angulo
-- `Seta para direita/esquerda`: ajusta forca
-- `ESPACO`: lanca a bola
+- `Qualquer tecla` ou `clique`: inicia o jogo na tela inicial
+- `Clique e arraste` na bola: mira e define forca do arremesso
+- `Solte o botao esquerdo`: lanca a bola
 - `R`: reseta a bola para nova tentativa
 - `N`: reinicia placar e tentativas
 

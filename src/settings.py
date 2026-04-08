@@ -5,15 +5,25 @@ SCREEN_HEIGHT = 576
 FPS = 60
 WINDOW_TITLE = "Lances Livres - Topicos 1"
 
+# Tela inicial
+START_SCREEN_IMAGE_PATH = "assets/start_screen.png"
+
 # Background opcional por imagem (baseado na referencia da quadra).
 USE_BACKGROUND_IMAGE = True
 BACKGROUND_IMAGE_PATH = "assets/quadrabasquete.png"
 SHOW_HOOP_OVERLAY_ON_PHOTO = False
 SHOW_PLAYER_SILHOUETTE_ON_PHOTO = False
+
+# Ancora do jogador e da bola na posicao inicial.
+PLAYER_BASE_X = 142
+PLAYER_BASE_Y = 446
+BALL_HAND_OFFSET_X = 82
+BALL_HAND_OFFSET_Y = -42
+
 THROW_IMAGE_HEIGHT = 180
 THROW_IMAGE_OFFSET_X = 66
-THROW_IMAGE_OFFSET_Y = 74
-THROW_FRAME_DURATION = 0.08
+THROW_IMAGE_OFFSET_Y = 58
+THROW_FRAME_DURATION = 0.07
 
 # Parametros de gameplay (parte 1)
 BALL_RADIUS = 12

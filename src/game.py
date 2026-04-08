@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -26,6 +27,7 @@ class FreeThrowGame:
         self.running = True
         self.using_photo_background = False
         self.static_background = self._build_static_background()
+        self.start_screen_background = self._load_start_screen_background()
         ball_rest_pos = self._get_ball_rest_position()
 
         self.ball_pos = pygame.Vector2(ball_rest_pos)
@@ -53,9 +55,15 @@ class FreeThrowGame:
         self.throw_anim_active = False
         self.throw_anim_time = 0.0
         self.throw_anim_frame_index = 0
+        self.throw_anim_start_index = 0
+        self.throw_anim_end_index = 0
+        self.throw_ball_released = False
+        self.pending_throw_velocity = pygame.Vector2(0, 0)
 
     def run(self) -> None:
         """Executa o loop principal."""
+        self._show_start_screen()
+
         while self.running:
             dt = self.clock.tick(settings.FPS) / 1000.0
             self._handle_events()
@@ -82,10 +90,77 @@ class FreeThrowGame:
             if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 self._release_drag_shot(event.pos)
 
+    def _show_start_screen(self) -> None:
+        waiting_for_player = True
+
+        while waiting_for_player and self.running:
+            self.clock.tick(settings.FPS)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    waiting_for_player = False
+                elif event.type in (pygame.KEYUP, pygame.MOUSEBUTTONUP):
+                    waiting_for_player = False
+
+            if not self.running:
+                break
+
+            self._draw_start_screen()
+            pygame.display.flip()
+
+    def _draw_start_screen(self) -> None:
+        if self.start_screen_background is not None:
+            self.screen.blit(self.start_screen_background, (0, 0))
+        else:
+            self.screen.blit(self.static_background, (0, 0))
+
+        overlay = pygame.Surface((settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((10, 14, 24, 145))
+        self.screen.blit(overlay, (0, 0))
+
+        title_surface = self.font.render("Lances Livres", True, settings.COLOR_TEXT)
+        title_x = settings.SCREEN_WIDTH // 2 - title_surface.get_width() // 2
+        title_y = settings.SCREEN_HEIGHT // 2 - 92
+        self.screen.blit(title_surface, (title_x, title_y))
+
+        subtitle_surface = self.small_font.render("Topicos 1", True, settings.COLOR_ACCENT)
+        subtitle_x = settings.SCREEN_WIDTH // 2 - subtitle_surface.get_width() // 2
+        self.screen.blit(subtitle_surface, (subtitle_x, title_y + 36))
+
+        prompt_surface = self.small_font.render(
+            "Pressione qualquer tecla ou clique para comecar",
+            True,
+            settings.COLOR_TEXT,
+        )
+        prompt_x = settings.SCREEN_WIDTH // 2 - prompt_surface.get_width() // 2
+        self.screen.blit(prompt_surface, (prompt_x, title_y + 86))
+
+        help_surface = self.small_font.render("Fechar janela encerra o jogo", True, settings.COLOR_TEXT)
+        help_x = settings.SCREEN_WIDTH // 2 - help_surface.get_width() // 2
+        self.screen.blit(help_surface, (help_x, title_y + 118))
+
+    def _load_start_screen_background(self) -> pygame.Surface | None:
+        image_path = Path(__file__).resolve().parents[1] / settings.START_SCREEN_IMAGE_PATH
+        if not image_path.exists():
+            return None
+
+        try:
+            loaded = pygame.image.load(str(image_path)).convert()
+        except pygame.error:
+            return None
+
+        return pygame.transform.smoothscale(
+            loaded,
+            (settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT),
+        )
+
     def _update(self, dt: float) -> None:
         self._update_status_timer(dt)
         self._update_feedback_flash_timer(dt)
         self._update_throw_animation(dt)
+
+        if self.dragging_shot and not self.ball_in_flight:
+            self._sync_ball_to_pose(1)
 
         if not self.ball_in_flight:
             return
@@ -110,6 +185,8 @@ class FreeThrowGame:
     def _start_drag_shot(self, mouse_pos: tuple[int, int]) -> None:
         if self.ball_in_flight:
             return
+        if self.throw_anim_active:
+            return
         if self.attempts_used >= settings.MAX_ATTEMPTS:
             self._set_status("Sem tentativas. Pressione N para novo jogo.", settings.COLOR_ACCENT, 2.0)
             return
@@ -124,6 +201,7 @@ class FreeThrowGame:
         self.drag_current_pos.update(click_pos)
         self.current_throw_force = settings.THROW_FORCE_MIN
         self._update_drag_aim_and_force()
+        self._sync_ball_to_pose(1)
 
     def _update_drag_shot(self, mouse_pos: tuple[int, int]) -> None:
         if not self.dragging_shot:
@@ -152,6 +230,9 @@ class FreeThrowGame:
             + t * (settings.THROW_FORCE_MAX - settings.THROW_FORCE_MIN)
         )
 
+        if self.dragging_shot and not self.ball_in_flight:
+            self._sync_ball_to_pose(1)
+
     def _release_drag_shot(self, mouse_pos: tuple[int, int]) -> None:
         if not self.dragging_shot:
             return
@@ -171,20 +252,21 @@ class FreeThrowGame:
             return
 
         angle_rad = math.radians(self.angle_deg)
-        self.ball_vel.x = math.cos(angle_rad) * self.current_throw_force
-        self.ball_vel.y = -math.sin(angle_rad) * self.current_throw_force
-        self.ball_in_flight = True
-        self.shot_scored = False
-        self.shot_time = 0.0
-        self.floor_bounces = 0
+        self.pending_throw_velocity = pygame.Vector2(
+            math.cos(angle_rad) * self.current_throw_force,
+            -math.sin(angle_rad) * self.current_throw_force,
+        )
+        self._sync_ball_to_pose(2)
         self.attempts_used += 1
         self.dragging_shot = False
+        self._launch_ball()
         self._start_throw_animation()
 
     def _cancel_drag_shot(self) -> None:
         self.dragging_shot = False
         self.drag_current_pos.update(self.ball_pos)
         self.current_throw_force = settings.THROW_FORCE_MIN
+        self._sync_ball_to_pose(0)
 
     def _reset_ball(self) -> None:
         self._cancel_drag_shot()
@@ -194,6 +276,13 @@ class FreeThrowGame:
         self.shot_scored = False
         self.shot_time = 0.0
         self.floor_bounces = 0
+        self.throw_anim_active = False
+        self.throw_anim_time = 0.0
+        self.throw_anim_frame_index = 0
+        self.throw_anim_start_index = 0
+        self.throw_anim_end_index = 0
+        self.throw_ball_released = False
+        self.pending_throw_velocity.update(0, 0)
 
     def _new_session(self) -> None:
         self.score = 0
@@ -224,27 +313,64 @@ class FreeThrowGame:
         if not self.throw_frames:
             self.throw_anim_active = False
             return
+
+        frame_count = len(self.throw_frames)
+        if frame_count >= 5:
+            self.throw_anim_start_index = 2
+            self.throw_anim_end_index = 4
+        elif frame_count >= 3:
+            self.throw_anim_start_index = 1
+            self.throw_anim_end_index = frame_count - 1
+        else:
+            self.throw_anim_start_index = 0
+            self.throw_anim_end_index = frame_count - 1
+
         self.throw_anim_active = True
         self.throw_anim_time = 0.0
-        self.throw_anim_frame_index = 0
+        self.throw_anim_frame_index = self.throw_anim_start_index
 
     def _update_throw_animation(self, dt: float) -> None:
         if not self.throw_anim_active:
             return
 
         self.throw_anim_time += dt
-        frame_count = len(self.throw_frames)
+        frame_count = self.throw_anim_end_index - self.throw_anim_start_index + 1
         total_duration = frame_count * settings.THROW_FRAME_DURATION
 
         if self.throw_anim_time >= total_duration:
             self.throw_anim_active = False
-            self.throw_anim_frame_index = frame_count - 1
+            self.throw_anim_frame_index = self.throw_anim_end_index
             return
 
-        self.throw_anim_frame_index = min(
-            frame_count - 1,
-            int(self.throw_anim_time / settings.THROW_FRAME_DURATION),
-        )
+        local_index = min(frame_count - 1, int(self.throw_anim_time / settings.THROW_FRAME_DURATION))
+        self.throw_anim_frame_index = self.throw_anim_start_index + local_index
+
+    def _launch_ball(self) -> None:
+        if self.throw_ball_released:
+            return
+
+        self.ball_vel.update(self.pending_throw_velocity)
+        self.ball_in_flight = True
+        self.shot_scored = False
+        self.shot_time = 0.0
+        self.floor_bounces = 0
+        self.throw_ball_released = True
+
+    def _sync_ball_to_pose(self, pose_index: int) -> None:
+        self.ball_pos.update(self._get_ball_pose_position(pose_index))
+
+    def _get_ball_pose_position(self, pose_index: int) -> tuple[float, float]:
+        pose_offsets = [
+            (settings.BALL_HAND_OFFSET_X, settings.BALL_HAND_OFFSET_Y),
+            (settings.BALL_HAND_OFFSET_X + 12, settings.BALL_HAND_OFFSET_Y - 58),
+            (settings.BALL_HAND_OFFSET_X + 18, settings.BALL_HAND_OFFSET_Y - 86),
+            (settings.BALL_HAND_OFFSET_X + 22, settings.BALL_HAND_OFFSET_Y - 106),
+            (settings.BALL_HAND_OFFSET_X + 26, settings.BALL_HAND_OFFSET_Y - 122),
+        ]
+        safe_index = max(0, min(pose_index, len(pose_offsets) - 1))
+        base_x, base_y = self._get_player_base_position()
+        offset_x, offset_y = pose_offsets[safe_index]
+        return (base_x + offset_x, base_y + offset_y)
 
     def _resolve_hoop_collisions(self) -> None:
         if self._is_descending_through_rim_channel():
@@ -396,7 +522,8 @@ class FreeThrowGame:
         if self.using_photo_background:
             if settings.SHOW_HOOP_OVERLAY_ON_PHOTO:
                 self._draw_hoop()
-            if settings.SHOW_PLAYER_SILHOUETTE_ON_PHOTO or self.throw_anim_active:
+            # Mantem o frame idle do jogador visivel para orientar o clique inicial.
+            if settings.SHOW_PLAYER_SILHOUETTE_ON_PHOTO or self.throw_anim_active or self.throw_frames:
                 self._draw_player()
         else:
             self._draw_court()
@@ -409,7 +536,11 @@ class FreeThrowGame:
 
     def _load_throw_frames(self) -> list[pygame.Surface]:
         assets_dir = Path(__file__).resolve().parents[1] / "assets"
-        frame_paths = sorted(assets_dir.glob("processo*.png"), key=self._frame_sort_key)
+        frame_paths = sorted(assets_dir.glob("process_*.png"), key=self._frame_sort_key)
+        if not frame_paths:
+            frame_paths = sorted(assets_dir.glob("precess_*.png"), key=self._frame_sort_key)
+        if not frame_paths:
+            frame_paths = sorted(assets_dir.glob("processo*.png"), key=self._frame_sort_key)
         if not frame_paths:
             frame_paths = sorted(assets_dir.glob("arremesso*.png"), key=self._frame_sort_key)
 
@@ -430,27 +561,32 @@ class FreeThrowGame:
 
     def _frame_sort_key(self, path: Path) -> tuple[int, str]:
         stem = path.stem
-        trailing_digits = ""
-        for char in reversed(stem):
-            if not char.isdigit():
-                break
-            trailing_digits = char + trailing_digits
-
-        if trailing_digits:
-            return (int(trailing_digits), stem)
+        number_chunks = re.findall(r"\d+", stem)
+        if number_chunks:
+            return (int(number_chunks[-1]), stem)
         return (10**9, stem)
 
     def _draw_player(self) -> None:
         if self.throw_anim_active and self.throw_frames:
             self._draw_throw_animation_frame()
             return
+        if self.dragging_shot and len(self.throw_frames) >= 2:
+            self._draw_throw_frame(1)
+            return
+        if self.throw_frames:
+            self._draw_throw_frame(0)
+            return
         self._draw_player_silhouette()
 
     def _draw_throw_animation_frame(self) -> None:
+        self._draw_throw_frame(self.throw_anim_frame_index)
+
+    def _draw_throw_frame(self, frame_index: int) -> None:
         if not self.throw_frames:
             return
 
-        frame = self.throw_frames[self.throw_anim_frame_index]
+        safe_index = max(0, min(frame_index, len(self.throw_frames) - 1))
+        frame = self.throw_frames[safe_index]
         base_x, base_y = self._get_player_base_position()
         image_rect = frame.get_rect()
         image_rect.midbottom = (
@@ -777,10 +913,14 @@ class FreeThrowGame:
         pygame.draw.circle(self.screen, (58, 64, 80), (int(hand_x), int(hand_y)), 6)
 
     def _get_player_base_position(self) -> tuple[float, float]:
-        return (settings.BALL_START_X - 48, settings.BALL_START_Y + 16)
+        return (settings.PLAYER_BASE_X, settings.PLAYER_BASE_Y)
 
     def _get_ball_rest_position(self) -> tuple[float, float]:
-        return (settings.BALL_START_X, settings.BALL_START_Y)
+        base_x, base_y = self._get_player_base_position()
+        return (
+            base_x + settings.BALL_HAND_OFFSET_X,
+            base_y + settings.BALL_HAND_OFFSET_Y,
+        )
 
     def _draw_ball(self) -> None:
         pygame.draw.circle(
