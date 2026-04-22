@@ -535,7 +535,7 @@ class FreeThrowGame:
         self._draw_round_end_overlay()
 
     def _load_throw_frames(self) -> list[pygame.Surface]:
-        assets_dir = Path(__file__).resolve().parents[1] / "assets"
+        assets_dir = Path(__file__).resolve().parents[1] / "assets" / "images" / "player"
         frame_paths = sorted(assets_dir.glob("process_*.png"), key=self._frame_sort_key)
         if not frame_paths:
             frame_paths = sorted(assets_dir.glob("precess_*.png"), key=self._frame_sort_key)

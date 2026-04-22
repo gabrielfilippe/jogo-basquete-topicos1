@@ -6,11 +6,11 @@ FPS = 60
 WINDOW_TITLE = "Lances Livres - Topicos 1"
 
 # Tela inicial
-START_SCREEN_IMAGE_PATH = "assets/start_screen.png"
+START_SCREEN_IMAGE_PATH = "assets/images/ui/start_screen.png"
 
 # Background opcional por imagem (baseado na referencia da quadra).
 USE_BACKGROUND_IMAGE = True
-BACKGROUND_IMAGE_PATH = "assets/quadrabasquete.png"
+BACKGROUND_IMAGE_PATH = "assets/images/court/quadrabasquete.png"
 SHOW_HOOP_OVERLAY_ON_PHOTO = False
 SHOW_PLAYER_SILHOUETTE_ON_PHOTO = False
 

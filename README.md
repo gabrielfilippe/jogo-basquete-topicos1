@@ -24,10 +24,24 @@ python -m src.main
 ```
 
 ## Estrutura
-- `src/main.py`: ponto de entrada
-- `src/game.py`: classe principal do jogo
-- `src/settings.py`: configuracoes globais
-- `assets/`: pasta para imagens, sons e fontes
+
+```
+jogo-basquete-topicos1/
+├── src/
+│   ├── main.py          # ponto de entrada
+│   ├── game.py          # classe principal e loop do jogo
+│   └── settings.py      # configuracoes e constantes globais
+├── assets/
+│   ├── images/
+│   │   ├── player/      # frames de animacao do jogador (process_*.png)
+│   │   ├── court/       # fundo da quadra (quadrabasquete.png)
+│   │   └── ui/          # tela inicial e elementos de interface
+│   ├── sounds/          # sons (futuro)
+│   └── fonts/           # fontes customizadas (futuro)
+├── docs/                # documentacao e acompanhamento do projeto
+├── requirements.txt
+└── README.md
+```
 
 ## Controles (parte 1)
 - `Qualquer tecla` ou `clique`: inicia o jogo na tela inicial
