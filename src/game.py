@@ -241,9 +241,9 @@ class FreeThrowGame:
         self.screen.blit(sec2, (cx - sec2.get_width() // 2, y))
         y += section_h
         for line in [
-            "1. Clique na bola para mirar",
-            "2. Arraste o mouse para mirar e definir a força",
-            "3. Solte o botão para arremessar",
+            "1° - Clique na bola para mirar.",
+            "2° - Arraste o mouse para mirar e definir a força.",
+            "3° - Solte o botão para arremessar.",
             "   Dica: Arraste mais longe para mais força!",
         ]:
             s = self.small_font.render(line, True, settings.COLOR_TEXT)
