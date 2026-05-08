@@ -28,6 +28,7 @@ class FreeThrowGame:
         self.using_photo_background = False
         self.static_background = self._build_static_background()
         self.start_screen_background = self._load_start_screen_background()
+        self.at_three_point_line = False  # False = lance livre, True = linha de 3
         ball_rest_pos = self._get_ball_rest_position()
 
         self.ball_pos = pygame.Vector2(ball_rest_pos)
@@ -228,8 +229,8 @@ class FreeThrowGame:
         self.screen.blit(sec1, (cx - sec1.get_width() // 2, y))
         y += section_h
         for line in [
-            "Acerte o máximo de cestas em 10 tentativas.",
-            "Quanto maior o aproveitamento, melhor!",
+            "Alterne entre Lance Livre (1pt) e Linha de 3 (3pts).",
+            "Acerte do lance livre para avançar à linha de 3!",
         ]:
             s = self.small_font.render(line, True, settings.COLOR_TEXT)
             self.screen.blit(s, (cx - s.get_width() // 2, y))
@@ -419,6 +420,7 @@ class FreeThrowGame:
     def _new_session(self) -> None:
         self.score = 0
         self.attempts_used = 0
+        self.at_three_point_line = False
         self._reset_ball()
         self._set_status("Novo jogo iniciado.", settings.COLOR_ACCENT, 1.2)
 
@@ -621,6 +623,10 @@ class FreeThrowGame:
         o ponto exato de cruzamento em RIM_Y. Se o cruzamento ocorreu dentro da
         abertura interna do aro (RIM_LEFT_X .. RIM_RIGHT_X), a cesta e contada.
 
+        Logica de pontuacao alternada:
+          - Lance livre: +1 ponto, avanca para linha de 3.
+          - Linha de 3:  +3 pontos, permanece na linha de 3.
+
         Para calibrar o aro com a imagem de fundo, ajuste em settings.py:
           RIM_Y       — altura do aro em pixels (diminua para subir)
           RIM_LEFT_X  — borda esquerda interna do aro
@@ -649,8 +655,15 @@ class FreeThrowGame:
         inner_right = settings.RIM_RIGHT_X - settings.BALL_RADIUS * 0.35
         if inner_left <= cross_x <= inner_right:
             self.shot_scored = True
-            self.score += 1
-            self._set_status("Cesta!", settings.COLOR_ACCENT, 1.5)
+            if self.at_three_point_line:
+                # Na linha de 3: vale 3 pontos, permanece na linha de 3.
+                self.score += settings.THREE_POINT_SCORE
+                self._set_status("CESTA DE 3!  +3 pts", settings.COLOR_ACCENT, 1.8)
+            else:
+                # No lance livre: vale 1 ponto, avanca para linha de 3.
+                self.score += settings.FREETHROW_SCORE
+                self.at_three_point_line = True
+                self._set_status("Cesta!  +1 pt  →  Linha de 3", settings.COLOR_ACCENT, 1.8)
             self._trigger_feedback_flash(settings.COLOR_SUCCESS)
 
     def _should_end_shot(self) -> bool:
@@ -669,7 +682,12 @@ class FreeThrowGame:
 
     def _finalize_shot(self, auto_miss: bool) -> None:
         if auto_miss:
-            self._set_status("Errou o lance.", settings.COLOR_FAILURE, 1.6)
+            if self.at_three_point_line:
+                # Errou da linha de 3: volta para o lance livre.
+                self.at_three_point_line = False
+                self._set_status("Errou!  →  Lance Livre", settings.COLOR_FAILURE, 1.6)
+            else:
+                self._set_status("Errou o lance.", settings.COLOR_FAILURE, 1.6)
             self._trigger_feedback_flash(settings.COLOR_FAILURE)
         self._reset_ball()
 
@@ -1079,7 +1097,9 @@ class FreeThrowGame:
         pygame.draw.circle(self.screen, (58, 64, 80), (int(hand_x), int(hand_y)), 6)
 
     def _get_player_base_position(self) -> tuple[float, float]:
-        return (settings.PLAYER_BASE_X, settings.PLAYER_BASE_Y)
+        if self.at_three_point_line:
+            return (settings.PLAYER_BASE_X_THREE_POINT, settings.PLAYER_BASE_Y_THREE_POINT)
+        return (settings.PLAYER_BASE_X_FREETHROW, settings.PLAYER_BASE_Y_FREETHROW)
 
     def _get_ball_rest_position(self) -> tuple[float, float]:
         base_x, base_y = self._get_player_base_position()
@@ -1156,8 +1176,18 @@ class FreeThrowGame:
         attempts_left = settings.MAX_ATTEMPTS - self.attempts_used
         pad = 16
 
+        # --- Indicador de posicao atual (canto superior esquerdo) ---
+        if self.at_three_point_line:
+            position_label = "🏀  Linha de 3 Pontos"
+            pos_color = settings.COLOR_ACCENT
+        else:
+            position_label = "🏀  Lance Livre"
+            pos_color = settings.COLOR_TEXT
+        pos_surface = self.small_font.render(position_label, True, pos_color)
+        self.screen.blit(pos_surface, (pad, pad))
+
         # --- Placar e tentativas no canto inferior direito ---
-        score_text = f"Placar: {self.score}  |  Tentativas: {self.attempts_used}/{settings.MAX_ATTEMPTS}"
+        score_text = f"Pontos: {self.score}  |  Arremessos: {self.attempts_used}/{settings.MAX_ATTEMPTS}"
         score_surface = self.small_font.render(score_text, True, settings.COLOR_TEXT)
         score_x = settings.SCREEN_WIDTH - score_surface.get_width() - pad
         score_y = settings.SCREEN_HEIGHT - score_surface.get_height() - pad
@@ -1168,7 +1198,7 @@ class FreeThrowGame:
             hint = "Fim das tentativas  —  Pressione N para recomecar"
             hint_surface = self.small_font.render(hint, True, settings.COLOR_ACCENT)
             hint_x = settings.SCREEN_WIDTH // 2 - hint_surface.get_width() // 2
-            self.screen.blit(hint_surface, (hint_x, 16))
+            self.screen.blit(hint_surface, (hint_x, 44))
 
         # --- Barra de forca no canto inferior direito (acima do placar) ---
         self._draw_force_bar()
@@ -1233,14 +1263,22 @@ class FreeThrowGame:
 
         title = self.font.render("Fim da Rodada", True, settings.COLOR_TEXT)
         title_x = settings.SCREEN_WIDTH // 2 - title.get_width() // 2
-        self.screen.blit(title, (title_x, 220))
+        self.screen.blit(title, (title_x, 200))
 
-        accuracy = (self.score / settings.MAX_ATTEMPTS) * 100.0
-        result_text = f"Aproveitamento: {self.score}/{settings.MAX_ATTEMPTS} ({accuracy:.0f}%)"
+        # Pontuacao total
+        result_text = f"Pontuação: {self.score} pts  em  {settings.MAX_ATTEMPTS} arremessos"
         result_surface = self.small_font.render(result_text, True, settings.COLOR_ACCENT)
         result_x = settings.SCREEN_WIDTH // 2 - result_surface.get_width() // 2
-        self.screen.blit(result_surface, (result_x, 258))
+        self.screen.blit(result_surface, (result_x, 240))
+
+        # Pontuacao maxima possivel: 1 + 3*9 = 28
+        max_possible = settings.FREETHROW_SCORE + settings.THREE_POINT_SCORE * (settings.MAX_ATTEMPTS - 1)
+        pct = (self.score / max_possible) * 100.0 if max_possible > 0 else 0.0
+        sub_text = f"({pct:.0f}% do máximo de {max_possible} pts)"
+        sub_surface = self.small_font.render(sub_text, True, settings.COLOR_TEXT)
+        sub_x = settings.SCREEN_WIDTH // 2 - sub_surface.get_width() // 2
+        self.screen.blit(sub_surface, (sub_x, 266))
 
         hint = self.small_font.render("Pressione N para jogar novamente", True, settings.COLOR_TEXT)
         hint_x = settings.SCREEN_WIDTH // 2 - hint.get_width() // 2
-        self.screen.blit(hint, (hint_x, 288))
+        self.screen.blit(hint, (hint_x, 298))

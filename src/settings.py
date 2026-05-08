@@ -17,6 +17,19 @@ SHOW_PLAYER_SILHOUETTE_ON_PHOTO = False
 # Ancora do jogador e da bola na posicao inicial.
 PLAYER_BASE_X = 142
 PLAYER_BASE_Y = 446
+
+# Posicoes de arremesso — ajuste X (horizontal) e Y (vertical) para cada linha.
+# X: menor valor = mais a esquerda na tela.
+# Y: menor valor = mais para cima na tela. A perspectiva da quadra faz a linha de
+#    3 pontos ficar um pouco mais baixa (Y maior) que o lance livre.
+PLAYER_BASE_X_FREETHROW   = 260   # lance livre — proximo ao topo do garrafao - quanto maior o numero, mais a direita o jogador fica
+PLAYER_BASE_Y_FREETHROW   = 390   # lance livre — altura na quadra - quanto maior o numero, mais para baixo o jogador fica
+PLAYER_BASE_X_THREE_POINT = 60   # linha de 3 pontos — mais a esquerda - quanto maior o numero, mais a direita o jogador fica
+PLAYER_BASE_Y_THREE_POINT = 390   # linha de 3 pontos —  quanto maior o numero, mais para baixo o jogador fica
+
+# Pontuacao por posicao
+FREETHROW_SCORE = 1
+THREE_POINT_SCORE = 3
 BALL_HAND_OFFSET_X = 100
 BALL_HAND_OFFSET_Y = -35
 

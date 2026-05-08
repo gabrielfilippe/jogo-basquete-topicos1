@@ -10,18 +10,19 @@ A proposta e desenvolver um jogo de lances livres com fisica simples, pontuacao 
 - Regras de cesta, pontuacao e tentativas
 
 ## Como executar
-1. Crie e ative um ambiente virtual (opcional, recomendado).
-2. Instale as dependencias:
+# 1. Ative o ambiente virtual
+source .venv/bin/activate
 
-```bash
+# 2. Instale as dependências (incluindo pygame)
 pip install -r requirements.txt
-```
 
-3. Rode o jogo:
-
-```bash
+# 3. Rode o jogo
 python -m src.main
-```
+
+# 3. Rode o jogo no linux
+
+python3 -m src.main
+
 
 ## Estrutura
 
