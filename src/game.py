@@ -28,6 +28,7 @@ class FreeThrowGame:
         self.using_photo_background = False
         self.static_background = self._build_static_background()
         self.start_screen_background = self._load_start_screen_background()
+        self.at_three_point_line = False  # False = lance livre, True = linha de 3
         ball_rest_pos = self._get_ball_rest_position()
 
         self.ball_pos = pygame.Vector2(ball_rest_pos)
@@ -60,6 +61,16 @@ class FreeThrowGame:
         self.throw_ball_released = False
         self.pending_throw_velocity = pygame.Vector2(0, 0)
 
+        # Botao "Como Jogar" no canto inferior direito da tela inicial.
+        btn_w, btn_h = 160, 38
+        padding = 20
+        self._how_to_play_btn = pygame.Rect(
+            settings.SCREEN_WIDTH - btn_w - padding,
+            settings.SCREEN_HEIGHT - btn_h - padding,
+            btn_w,
+            btn_h,
+        )
+
     def run(self) -> None:
         """Executa o loop principal."""
         self._show_start_screen()
@@ -91,6 +102,9 @@ class FreeThrowGame:
                 self._release_drag_shot(event.pos)
 
     def _show_start_screen(self) -> None:
+        """Exibe a tela inicial. Clicar em 'Como Jogar' abre as instrucoes;
+        qualquer outra tecla ou clique inicia o jogo.
+        """
         waiting_for_player = True
 
         while waiting_for_player and self.running:
@@ -99,7 +113,13 @@ class FreeThrowGame:
                 if event.type == pygame.QUIT:
                     self.running = False
                     waiting_for_player = False
-                elif event.type in (pygame.KEYUP, pygame.MOUSEBUTTONUP):
+                elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    if self._how_to_play_btn.collidepoint(event.pos):
+                        # Abre tela de instrucoes sem sair da tela inicial.
+                        self._show_instructions_screen()
+                    else:
+                        waiting_for_player = False
+                elif event.type == pygame.KEYUP:
                     waiting_for_player = False
 
             if not self.running:
@@ -109,35 +129,148 @@ class FreeThrowGame:
             pygame.display.flip()
 
     def _draw_start_screen(self) -> None:
+        """Renderiza a tela inicial com titulo, prompt e botao 'Como Jogar'."""
         if self.start_screen_background is not None:
             self.screen.blit(self.start_screen_background, (0, 0))
         else:
             self.screen.blit(self.static_background, (0, 0))
 
         overlay = pygame.Surface((settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((10, 14, 24, 145))
+        overlay.fill((10, 14, 24, 160))
         self.screen.blit(overlay, (0, 0))
 
-        title_surface = self.font.render("Lances Livres", True, settings.COLOR_TEXT)
-        title_x = settings.SCREEN_WIDTH // 2 - title_surface.get_width() // 2
-        title_y = settings.SCREEN_HEIGHT // 2 - 92
-        self.screen.blit(title_surface, (title_x, title_y))
+        cx = settings.SCREEN_WIDTH // 2
+        cy = settings.SCREEN_HEIGHT // 2
 
-        subtitle_surface = self.small_font.render("Topicos 1", True, settings.COLOR_ACCENT)
-        subtitle_x = settings.SCREEN_WIDTH // 2 - subtitle_surface.get_width() // 2
-        self.screen.blit(subtitle_surface, (subtitle_x, title_y + 36))
+        # Titulo principal.
+        # title_surface = self.font.render("BilóHooper", True, settings.COLOR_ACCENT)
+        # self.screen.blit(title_surface, (cx - title_surface.get_width() // 2, cy - 100))
 
+        # # Subtitulo.
+        # sub_surface = self.small_font.render("Lances Livres", True, settings.COLOR_TEXT)
+        # self.screen.blit(sub_surface, (cx - sub_surface.get_width() // 2, cy - 64))
+
+        # Prompt de inicio.
         prompt_surface = self.small_font.render(
-            "Pressione qualquer tecla ou clique para comecar",
+            "Pressione qualquer tecla ou clique para jogar!",
             True,
             settings.COLOR_TEXT,
         )
-        prompt_x = settings.SCREEN_WIDTH // 2 - prompt_surface.get_width() // 2
-        self.screen.blit(prompt_surface, (prompt_x, title_y + 86))
+        self.screen.blit(prompt_surface, (cx - prompt_surface.get_width() // 2, cy - 16))
 
-        help_surface = self.small_font.render("Fechar janela encerra o jogo", True, settings.COLOR_TEXT)
-        help_x = settings.SCREEN_WIDTH // 2 - help_surface.get_width() // 2
-        self.screen.blit(help_surface, (help_x, title_y + 118))
+        # Botao "Como Jogar" no canto inferior direito.
+        mouse_pos = pygame.mouse.get_pos()
+        btn_hovered = self._how_to_play_btn.collidepoint(mouse_pos)
+        btn_color = settings.COLOR_ACCENT if btn_hovered else (30, 38, 56)
+        btn_text_color = (10, 14, 24) if btn_hovered else settings.COLOR_TEXT
+        pygame.draw.rect(self.screen, btn_color, self._how_to_play_btn, border_radius=8)
+        pygame.draw.rect(self.screen, settings.COLOR_ACCENT, self._how_to_play_btn, width=2, border_radius=8)
+        btn_label = self.small_font.render("Como jogar", True, btn_text_color)
+        self.screen.blit(
+            btn_label,
+            (
+                self._how_to_play_btn.centerx - btn_label.get_width() // 2,
+                self._how_to_play_btn.centery - btn_label.get_height() // 2,
+            ),
+        )
+
+    def _show_instructions_screen(self) -> None:
+        """Exibe a tela de instrucoes completa. Fecha com qualquer tecla ou clique."""
+        waiting = True
+        while waiting and self.running:
+            self.clock.tick(settings.FPS)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    waiting = False
+                elif event.type in (pygame.KEYUP, pygame.MOUSEBUTTONUP):
+                    waiting = False
+
+            if not self.running:
+                break
+
+            self._draw_instructions_screen()
+            pygame.display.flip()
+
+    def _draw_instructions_screen(self) -> None:
+        """Renderiza o overlay de instrucoes centralizado verticalmente na tela."""
+        # Fundo.
+        if self.start_screen_background is not None:
+            self.screen.blit(self.start_screen_background, (0, 0))
+        else:
+            self.screen.blit(self.static_background, (0, 0))
+
+        overlay = pygame.Surface((settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((6, 10, 20, 210))
+        self.screen.blit(overlay, (0, 0))
+
+        cx = settings.SCREEN_WIDTH // 2
+        title_gap = 48   # espaco apos o titulo
+        section_h = 28   # altura de cada cabecalho de secao
+        body_h = 24      # altura de cada linha de conteudo
+        gap = 10         # espaco entre secoes
+
+        # Calcula a altura total do bloco para centralizar verticalmente.
+        total_h = (
+            title_gap
+            + section_h + 2 * body_h + gap   # OBJETIVO
+            + section_h + 4 * body_h + gap   # CONTROLES
+            + section_h + 2 * body_h          # TECLAS
+        )
+        y = (settings.SCREEN_HEIGHT - total_h) // 2
+
+        # # Titulo da tela.
+        # title = self.font.render("Como Jogar", True, settings.COLOR_ACCENT)
+        # self.screen.blit(title, (cx - title.get_width() // 2, y))
+        # y += title_gap
+
+        # Secao: Objetivo.
+        sec1 = self.small_font.render("OBJETIVO", True, settings.COLOR_ACCENT)
+        self.screen.blit(sec1, (cx - sec1.get_width() // 2, y))
+        y += section_h
+        for line in [
+            "Alterne entre Lance Livre (1pt) e Linha de 3 (3pts).",
+            "Acerte do lance livre para avançar à linha de 3!",
+        ]:
+            s = self.small_font.render(line, True, settings.COLOR_TEXT)
+            self.screen.blit(s, (cx - s.get_width() // 2, y))
+            y += body_h
+        y += gap
+
+        # Secao: Controles.
+        sec2 = self.small_font.render("CONTROLES", True, settings.COLOR_ACCENT)
+        self.screen.blit(sec2, (cx - sec2.get_width() // 2, y))
+        y += section_h
+        for line in [
+            "1° - Clique na bola para mirar.",
+            "2° - Arraste o mouse para mirar e definir a força.",
+            "3° - Solte o botão para arremessar.",
+            "   Dica: Arraste mais longe para mais força!",
+        ]:
+            s = self.small_font.render(line, True, settings.COLOR_TEXT)
+            self.screen.blit(s, (cx - s.get_width() // 2, y))
+            y += body_h
+        y += gap
+
+        # Secao: Teclas.
+        sec3 = self.small_font.render("TECLAS DE ATALHO", True, settings.COLOR_ACCENT)
+        self.screen.blit(sec3, (cx - sec3.get_width() // 2, y))
+        y += section_h
+        for line in [
+            "R — Resetar a posição da bola",
+            "N — Iniciar nova partida",
+        ]:
+            s = self.small_font.render(line, True, settings.COLOR_TEXT)
+            self.screen.blit(s, (cx - s.get_width() // 2, y))
+            y += body_h
+
+        # Rodape fixo na parte inferior da tela.
+        footer = self.small_font.render(
+            "Pressione qualquer tecla ou clique para voltar",
+            True,
+            (160, 160, 180),
+        )
+        self.screen.blit(footer, (cx - footer.get_width() // 2, settings.SCREEN_HEIGHT - 36))
 
     def _load_start_screen_background(self) -> pygame.Surface | None:
         image_path = Path(__file__).resolve().parents[1] / settings.START_SCREEN_IMAGE_PATH
@@ -287,6 +420,7 @@ class FreeThrowGame:
     def _new_session(self) -> None:
         self.score = 0
         self.attempts_used = 0
+        self.at_three_point_line = False
         self._reset_ball()
         self._set_status("Novo jogo iniciado.", settings.COLOR_ACCENT, 1.2)
 
@@ -361,11 +495,11 @@ class FreeThrowGame:
 
     def _get_ball_pose_position(self, pose_index: int) -> tuple[float, float]:
         pose_offsets = [
-            (settings.BALL_HAND_OFFSET_X, settings.BALL_HAND_OFFSET_Y),
-            (settings.BALL_HAND_OFFSET_X + 12, settings.BALL_HAND_OFFSET_Y - 58),
-            (settings.BALL_HAND_OFFSET_X + 18, settings.BALL_HAND_OFFSET_Y - 86),
-            (settings.BALL_HAND_OFFSET_X + 22, settings.BALL_HAND_OFFSET_Y - 106),
-            (settings.BALL_HAND_OFFSET_X + 26, settings.BALL_HAND_OFFSET_Y - 122),
+            (settings.BALL_HAND_OFFSET_X,                          settings.BALL_HAND_OFFSET_Y),
+            (settings.BALL_HAND_OFFSET_X + settings.BALL_AIM_OFFSET_X, settings.BALL_HAND_OFFSET_Y + settings.BALL_AIM_OFFSET_Y),
+            (settings.BALL_HAND_OFFSET_X + 22, settings.BALL_HAND_OFFSET_Y - 105),
+            (settings.BALL_HAND_OFFSET_X + 27, settings.BALL_HAND_OFFSET_Y - 129),
+            (settings.BALL_HAND_OFFSET_X + 32, settings.BALL_HAND_OFFSET_Y - 149),
         ]
         safe_index = max(0, min(pose_index, len(pose_offsets) - 1))
         base_x, base_y = self._get_player_base_position()
@@ -373,11 +507,21 @@ class FreeThrowGame:
         return (base_x + offset_x, base_y + offset_y)
 
     def _resolve_hoop_collisions(self) -> None:
+        """Trata colisoes da bola com o aro (nos esquerdo/direito) e com a tabela.
+
+        Nao aplica colisao se a bola ja esta descendo pelo canal do aro (cesta
+        em progresso) ou se ja pontuou e ainda esta passando pelo aro.
+        Os nos do aro sao tratados como circulos — veja RIM_LEFT_X / RIM_RIGHT_X
+        e RIM_NODE_RADIUS em settings.py para calibrar a posicao e tamanho.
+        """
+        # Se a bola esta descendo pelo meio do aro, deixa passar (contagem de cesta).
         if self._is_descending_through_rim_channel():
             return
+        # Apos pontuar, ignora colisao enquanto a bola ainda sai pelo fundo.
         if self.shot_scored and self.ball_vel.y > 0 and self.ball_pos.y >= settings.RIM_Y - settings.BALL_RADIUS:
             return
 
+        # Cria pontos de colisao para o no esquerdo e direito do aro.
         left_rim = pygame.Vector2(settings.RIM_LEFT_X, settings.RIM_Y)
         right_rim = pygame.Vector2(settings.RIM_RIGHT_X, settings.RIM_Y)
 
@@ -386,13 +530,22 @@ class FreeThrowGame:
         self._resolve_backboard_collision()
 
     def _is_descending_through_rim_channel(self) -> bool:
+        """Verifica se a bola esta descendo pelo interior do aro (canal de cesta).
+
+        Retorna True quando a bola desce dentro da abertura horizontal do aro
+        e esta na faixa vertical proxima ao RIM_Y. Nesse caso, colisoes com os
+        nos do aro sao suprimidas para a bola passar livremente.
+        """
+        # Bola subindo nao pode estar 'passando' pelo aro.
         if self.ball_vel.y <= 0:
             return False
 
+        # Verifica se o centro da bola esta dentro da abertura horizontal do aro.
         inner_left = settings.RIM_LEFT_X + settings.BALL_RADIUS * 0.2
         inner_right = settings.RIM_RIGHT_X - settings.BALL_RADIUS * 0.2
         in_channel_x = inner_left <= self.ball_pos.x <= inner_right
 
+        # Verifica se a bola esta na faixa vertical proxima ao aro.
         rim_top = settings.RIM_Y - settings.BALL_RADIUS * 0.9
         rim_bottom = settings.RIM_Y + settings.BALL_RADIUS * 2.4
         near_rim_y = rim_top <= self.ball_pos.y <= rim_bottom
@@ -464,13 +617,31 @@ class FreeThrowGame:
             self.ball_vel.y = abs(self.ball_vel.y) * settings.BACKBOARD_BOUNCE
 
     def _check_made_basket(self, prev_pos: pygame.Vector2) -> None:
+        """Detecta se a bola cruzou o plano do aro de cima para baixo (cesta valida).
+
+        Usa interpolacao linear entre a posicao anterior e atual para encontrar
+        o ponto exato de cruzamento em RIM_Y. Se o cruzamento ocorreu dentro da
+        abertura interna do aro (RIM_LEFT_X .. RIM_RIGHT_X), a cesta e contada.
+
+        Logica de pontuacao alternada:
+          - Lance livre: +1 ponto, avanca para linha de 3.
+          - Linha de 3:  +3 pontos, permanece na linha de 3.
+
+        Para calibrar o aro com a imagem de fundo, ajuste em settings.py:
+          RIM_Y       — altura do aro em pixels (diminua para subir)
+          RIM_LEFT_X  — borda esquerda interna do aro
+          RIM_RIGHT_X — borda direita interna do aro
+        """
+        # Ignora se ja pontuou ou se a bola esta subindo.
         if self.shot_scored:
             return
         if self.ball_vel.y <= 0:
             return
+        # A bola deve ter cruzado RIM_Y neste frame (estava acima, agora abaixo).
         if prev_pos.y >= settings.RIM_Y or self.ball_pos.y < settings.RIM_Y:
             return
 
+        # Interpola para achar a posicao X exata no plano do aro.
         dy = self.ball_pos.y - prev_pos.y
         if abs(dy) <= 0.0001:
             return
@@ -479,12 +650,20 @@ class FreeThrowGame:
         t = max(0.0, min(1.0, t))
         cross_x = prev_pos.x + (self.ball_pos.x - prev_pos.x) * t
 
+        # Verifica se o cruzamento foi dentro da abertura interna do aro.
         inner_left = settings.RIM_LEFT_X + settings.BALL_RADIUS * 0.35
         inner_right = settings.RIM_RIGHT_X - settings.BALL_RADIUS * 0.35
         if inner_left <= cross_x <= inner_right:
             self.shot_scored = True
-            self.score += 1
-            self._set_status("Cesta!", settings.COLOR_ACCENT, 1.5)
+            if self.at_three_point_line:
+                # Na linha de 3: vale 3 pontos, permanece na linha de 3.
+                self.score += settings.THREE_POINT_SCORE
+                self._set_status("CESTA DE 3!  +3 pts", settings.COLOR_ACCENT, 1.8)
+            else:
+                # No lance livre: vale 1 ponto, avanca para linha de 3.
+                self.score += settings.FREETHROW_SCORE
+                self.at_three_point_line = True
+                self._set_status("Cesta!  +1 pt  →  Linha de 3", settings.COLOR_ACCENT, 1.8)
             self._trigger_feedback_flash(settings.COLOR_SUCCESS)
 
     def _should_end_shot(self) -> bool:
@@ -503,7 +682,12 @@ class FreeThrowGame:
 
     def _finalize_shot(self, auto_miss: bool) -> None:
         if auto_miss:
-            self._set_status("Errou o lance.", settings.COLOR_FAILURE, 1.6)
+            if self.at_three_point_line:
+                # Errou da linha de 3: volta para o lance livre.
+                self.at_three_point_line = False
+                self._set_status("Errou!  →  Lance Livre", settings.COLOR_FAILURE, 1.6)
+            else:
+                self._set_status("Errou o lance.", settings.COLOR_FAILURE, 1.6)
             self._trigger_feedback_flash(settings.COLOR_FAILURE)
         self._reset_ball()
 
@@ -535,7 +719,7 @@ class FreeThrowGame:
         self._draw_round_end_overlay()
 
     def _load_throw_frames(self) -> list[pygame.Surface]:
-        assets_dir = Path(__file__).resolve().parents[1] / "assets"
+        assets_dir = Path(__file__).resolve().parents[1] / "assets" / "images" / "player"
         frame_paths = sorted(assets_dir.glob("process_*.png"), key=self._frame_sort_key)
         if not frame_paths:
             frame_paths = sorted(assets_dir.glob("precess_*.png"), key=self._frame_sort_key)
@@ -913,7 +1097,9 @@ class FreeThrowGame:
         pygame.draw.circle(self.screen, (58, 64, 80), (int(hand_x), int(hand_y)), 6)
 
     def _get_player_base_position(self) -> tuple[float, float]:
-        return (settings.PLAYER_BASE_X, settings.PLAYER_BASE_Y)
+        if self.at_three_point_line:
+            return (settings.PLAYER_BASE_X_THREE_POINT, settings.PLAYER_BASE_Y_THREE_POINT)
+        return (settings.PLAYER_BASE_X_FREETHROW, settings.PLAYER_BASE_Y_FREETHROW)
 
     def _get_ball_rest_position(self) -> tuple[float, float]:
         base_x, base_y = self._get_player_base_position()
@@ -986,67 +1172,83 @@ class FreeThrowGame:
             pygame.draw.circle(self.screen, color, sim_pos, 3)
 
     def _draw_ui(self) -> None:
-        message = "Clique na bola, arraste para mirar/forca e solte para arremessar"
-        text_surface = self.font.render(message, True, settings.COLOR_TEXT)
-        self.screen.blit(text_surface, (24, 24))
-
-        secondary = "R: resetar bola | N: novo jogo"
-        secondary_surface = self.small_font.render(secondary, True, settings.COLOR_TEXT)
-        self.screen.blit(secondary_surface, (24, 58))
-
-        stats = f"Angulo: {self.angle_deg:.1f} deg  |  Forca atual: {self.current_throw_force:.0f}"
-        stats_surface = self.small_font.render(stats, True, settings.COLOR_TEXT)
-        self.screen.blit(stats_surface, (24, 84))
-
+        """Renderiza a UI minimalista em jogo: placar, barra de forca e feedback."""
         attempts_left = settings.MAX_ATTEMPTS - self.attempts_used
-        score_text = f"Placar: {self.score}  |  Tentativas: {self.attempts_used}/{settings.MAX_ATTEMPTS}"
+        pad = 16
+
+        # --- Indicador de posicao atual (canto superior esquerdo) ---
+        if self.at_three_point_line:
+            position_label = "🏀  Linha de 3 Pontos"
+            pos_color = settings.COLOR_ACCENT
+        else:
+            position_label = "🏀  Lance Livre"
+            pos_color = settings.COLOR_TEXT
+        pos_surface = self.small_font.render(position_label, True, pos_color)
+        self.screen.blit(pos_surface, (pad, pad))
+
+        # --- Placar e tentativas no canto inferior direito ---
+        score_text = f"Pontos: {self.score}  |  Arremessos: {self.attempts_used}/{settings.MAX_ATTEMPTS}"
         score_surface = self.small_font.render(score_text, True, settings.COLOR_TEXT)
-        self.screen.blit(score_surface, (24, 110))
+        score_x = settings.SCREEN_WIDTH - score_surface.get_width() - pad
+        score_y = settings.SCREEN_HEIGHT - score_surface.get_height() - pad
+        self.screen.blit(score_surface, (score_x, score_y))
 
-        if not self.ball_in_flight:
-            if attempts_left > 0:
-                hint = "Arraste mais longe para aumentar forca"
-            else:
-                hint = "Fim das tentativas. Pressione N para recomecar"
+        # Aviso de fim de tentativas centralizado no topo.
+        if not self.ball_in_flight and attempts_left == 0:
+            hint = "Fim das tentativas  —  Pressione N para recomecar"
             hint_surface = self.small_font.render(hint, True, settings.COLOR_ACCENT)
-            self.screen.blit(hint_surface, (24, 136))
+            hint_x = settings.SCREEN_WIDTH // 2 - hint_surface.get_width() // 2
+            self.screen.blit(hint_surface, (hint_x, 44))
 
+        # --- Barra de forca no canto inferior direito (acima do placar) ---
         self._draw_force_bar()
 
+        # --- Mensagem de feedback centralizada na tela ---
         if self.status_timer > 0.0:
             status_surface = self.font.render(self.status_text, True, self.status_color)
             status_x = settings.SCREEN_WIDTH // 2 - status_surface.get_width() // 2
-            self.screen.blit(status_surface, (status_x, 150))
+            self.screen.blit(status_surface, (status_x, settings.SCREEN_HEIGHT // 2 - 60))
 
     def _draw_force_bar(self) -> None:
+        """Barra de forca horizontal ancorada no canto inferior direito.
+        Aparece apenas enquanto o jogador esta arrastando para arremessar.
+        """
         if not self.dragging_shot:
             return
 
-        bar_x = 24
-        bar_y = 168
-        bar_w = 320
-        bar_h = 18
+        pad = 16
+        bar_w = 200
+        bar_h = 12
+        # Posicionada acima do texto de placar (que tem ~20px de altura + pad).
+        bar_x = settings.SCREEN_WIDTH - bar_w - pad
+        bar_y = settings.SCREEN_HEIGHT - bar_h - 44
 
         pct = (self.current_throw_force - settings.THROW_FORCE_MIN) / (
             settings.THROW_FORCE_MAX - settings.THROW_FORCE_MIN
         )
         pct = max(0.0, min(1.0, pct))
 
-        pygame.draw.rect(self.screen, (30, 36, 48), (bar_x, bar_y, bar_w, bar_h), border_radius=4)
-        pygame.draw.rect(self.screen, settings.COLOR_LINES, (bar_x, bar_y, bar_w, bar_h), width=2, border_radius=4)
+        # Fundo e borda.
+        pygame.draw.rect(self.screen, (20, 26, 40), (bar_x, bar_y, bar_w, bar_h), border_radius=4)
+        pygame.draw.rect(self.screen, settings.COLOR_LINES, (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=4)
 
-        fill_w = int((bar_w - 4) * pct)
+        # Preenchimento colorido conforme forca.
+        fill_w = int((bar_w - 2) * pct)
         if fill_w > 0:
+            # Cor vai de azul (fraco) para laranja/acento (maximo).
+            r = int(settings.COLOR_ACCENT[0] * pct + 80 * (1 - pct))
+            g = int(settings.COLOR_ACCENT[1] * pct + 120 * (1 - pct))
+            b = int(settings.COLOR_ACCENT[2] * pct + 200 * (1 - pct))
             pygame.draw.rect(
                 self.screen,
-                settings.COLOR_ACCENT,
-                (bar_x + 2, bar_y + 2, fill_w, bar_h - 4),
+                (r, g, b),
+                (bar_x + 1, bar_y + 1, fill_w, bar_h - 2),
                 border_radius=3,
             )
 
-        label = f"Forca: {self.current_throw_force:.0f}"
-        label_surface = self.small_font.render(label, True, settings.COLOR_TEXT)
-        self.screen.blit(label_surface, (bar_x + bar_w + 12, bar_y - 1))
+        # Label "Forca" a esquerda da barra.
+        label = self.small_font.render("Força:", True, settings.COLOR_TEXT)
+        self.screen.blit(label, (bar_x - label.get_width() - 8, bar_y - 1))
 
     def _draw_round_end_overlay(self) -> None:
         if self.attempts_used < settings.MAX_ATTEMPTS:
@@ -1061,14 +1263,22 @@ class FreeThrowGame:
 
         title = self.font.render("Fim da Rodada", True, settings.COLOR_TEXT)
         title_x = settings.SCREEN_WIDTH // 2 - title.get_width() // 2
-        self.screen.blit(title, (title_x, 220))
+        self.screen.blit(title, (title_x, 200))
 
-        accuracy = (self.score / settings.MAX_ATTEMPTS) * 100.0
-        result_text = f"Aproveitamento: {self.score}/{settings.MAX_ATTEMPTS} ({accuracy:.0f}%)"
+        # Pontuacao total
+        result_text = f"Pontuação: {self.score} pts  em  {settings.MAX_ATTEMPTS} arremessos"
         result_surface = self.small_font.render(result_text, True, settings.COLOR_ACCENT)
         result_x = settings.SCREEN_WIDTH // 2 - result_surface.get_width() // 2
-        self.screen.blit(result_surface, (result_x, 258))
+        self.screen.blit(result_surface, (result_x, 240))
+
+        # Pontuacao maxima possivel: 1 + 3*9 = 28
+        max_possible = settings.FREETHROW_SCORE + settings.THREE_POINT_SCORE * (settings.MAX_ATTEMPTS - 1)
+        pct = (self.score / max_possible) * 100.0 if max_possible > 0 else 0.0
+        sub_text = f"({pct:.0f}% do máximo de {max_possible} pts)"
+        sub_surface = self.small_font.render(sub_text, True, settings.COLOR_TEXT)
+        sub_x = settings.SCREEN_WIDTH // 2 - sub_surface.get_width() // 2
+        self.screen.blit(sub_surface, (sub_x, 266))
 
         hint = self.small_font.render("Pressione N para jogar novamente", True, settings.COLOR_TEXT)
         hint_x = settings.SCREEN_WIDTH // 2 - hint.get_width() // 2
-        self.screen.blit(hint, (hint_x, 288))
+        self.screen.blit(hint, (hint_x, 298))

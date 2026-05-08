@@ -10,24 +10,39 @@ A proposta e desenvolver um jogo de lances livres com fisica simples, pontuacao 
 - Regras de cesta, pontuacao e tentativas
 
 ## Como executar
-1. Crie e ative um ambiente virtual (opcional, recomendado).
-2. Instale as dependencias:
+# 1. Ative o ambiente virtual
+source .venv/bin/activate
 
-```bash
+# 2. Instale as dependências (incluindo pygame)
 pip install -r requirements.txt
-```
 
-3. Rode o jogo:
-
-```bash
+# 3. Rode o jogo
 python -m src.main
-```
+
+# 3. Rode o jogo no linux
+
+python3 -m src.main
+
 
 ## Estrutura
-- `src/main.py`: ponto de entrada
-- `src/game.py`: classe principal do jogo
-- `src/settings.py`: configuracoes globais
-- `assets/`: pasta para imagens, sons e fontes
+
+```
+jogo-basquete-topicos1/
+├── src/
+│   ├── main.py          # ponto de entrada
+│   ├── game.py          # classe principal e loop do jogo
+│   └── settings.py      # configuracoes e constantes globais
+├── assets/
+│   ├── images/
+│   │   ├── player/      # frames de animacao do jogador (process_*.png)
+│   │   ├── court/       # fundo da quadra (quadrabasquete.png)
+│   │   └── ui/          # tela inicial e elementos de interface
+│   ├── sounds/          # sons (futuro)
+│   └── fonts/           # fontes customizadas (futuro)
+├── docs/                # documentacao e acompanhamento do projeto
+├── requirements.txt
+└── README.md
+```
 
 ## Controles (parte 1)
 - `Qualquer tecla` ou `clique`: inicia o jogo na tela inicial
