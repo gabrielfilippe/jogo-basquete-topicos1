@@ -245,7 +245,7 @@ class FreeThrowGame:
             "1° - Clique na bola para mirar.",
             "2° - Arraste o mouse para mirar e definir a força.",
             "3° - Solte o botão para arremessar.",
-            "   Dica: Arraste mais longe para mais força!",
+            "   OBS: A força do arremesso é definida pelo movimento do mouse!",
         ]:
             s = self.small_font.render(line, True, settings.COLOR_TEXT)
             self.screen.blit(s, (cx - s.get_width() // 2, y))
@@ -658,12 +658,12 @@ class FreeThrowGame:
             if self.at_three_point_line:
                 # Na linha de 3: vale 3 pontos, permanece na linha de 3.
                 self.score += settings.THREE_POINT_SCORE
-                self._set_status("CESTA DE 3!  +3 pts", settings.COLOR_ACCENT, 1.8)
+                self._set_status("CESTA DE 3!  +3 pts", settings.COLOR_SUCCESS, 1.8)
             else:
                 # No lance livre: vale 1 ponto, avanca para linha de 3.
                 self.score += settings.FREETHROW_SCORE
                 self.at_three_point_line = True
-                self._set_status("Cesta!  +1 pt  →  Linha de 3", settings.COLOR_ACCENT, 1.8)
+                self._set_status("Cesta!  +1 pt  →  Linha de 3", settings.COLOR_SUCCESS, 1.8)
             self._trigger_feedback_flash(settings.COLOR_SUCCESS)
 
     def _should_end_shot(self) -> bool:
@@ -1190,7 +1190,21 @@ class FreeThrowGame:
         score_text = f"Pontos: {self.score}  |  Arremessos: {self.attempts_used}/{settings.MAX_ATTEMPTS}"
         score_surface = self.small_font.render(score_text, True, settings.COLOR_TEXT)
         score_x = settings.SCREEN_WIDTH - score_surface.get_width() - pad
-        score_y = settings.SCREEN_HEIGHT - score_surface.get_height() - pad
+        score_y = settings.SCREEN_HEIGHT - score_surface.get_height() - pad  # posicao original na base
+
+        # Fundo sutil arredondado atras do placar.
+        _bg_px, _bg_py = 10, 6
+        _score_bg = pygame.Surface(
+            (score_surface.get_width() + _bg_px * 2, score_surface.get_height() + _bg_py * 2),
+            pygame.SRCALPHA,
+        )
+        pygame.draw.rect(
+            _score_bg,
+            (8, 14, 22, 140),
+            _score_bg.get_rect(),
+            border_radius=8,
+        )
+        self.screen.blit(_score_bg, (score_x - _bg_px, score_y - _bg_py))
         self.screen.blit(score_surface, (score_x, score_y))
 
         # Aviso de fim de tentativas centralizado no topo.
@@ -1203,11 +1217,26 @@ class FreeThrowGame:
         # --- Barra de forca no canto inferior direito (acima do placar) ---
         self._draw_force_bar()
 
-        # --- Mensagem de feedback centralizada na tela ---
+        # --- Mensagem de feedback: posicao propria, independente do placar ---
         if self.status_timer > 0.0:
             status_surface = self.font.render(self.status_text, True, self.status_color)
             status_x = settings.SCREEN_WIDTH // 2 - status_surface.get_width() // 2
-            self.screen.blit(status_surface, (status_x, settings.SCREEN_HEIGHT // 2 - 60))
+            status_y = settings.SCREEN_HEIGHT - status_surface.get_height() - 55
+
+            # Fundo sutil arredondado atras da mensagem de feedback.
+            _fbg_px, _fbg_py = 14, 7
+            _status_bg = pygame.Surface(
+                (status_surface.get_width() + _fbg_px * 2, status_surface.get_height() + _fbg_py * 2),
+                pygame.SRCALPHA,
+            )
+            pygame.draw.rect(
+                _status_bg,
+                (8, 14, 22, 140),
+                _status_bg.get_rect(),
+                border_radius=10,
+            )
+            self.screen.blit(_status_bg, (status_x - _fbg_px, status_y - _fbg_py))
+            self.screen.blit(status_surface, (status_x, status_y))
 
     def _draw_force_bar(self) -> None:
         """Barra de forca horizontal ancorada no canto inferior direito.
@@ -1217,18 +1246,37 @@ class FreeThrowGame:
             return
 
         pad = 16
-        bar_w = 200
-        bar_h = 12
+        bar_w = 230 # posição da barra de força - direita/esquerda
+        bar_h = 12 # espessura da barra de força
         # Posicionada acima do texto de placar (que tem ~20px de altura + pad).
-        bar_x = settings.SCREEN_WIDTH - bar_w - pad
-        bar_y = settings.SCREEN_HEIGHT - bar_h - 44
+        bar_x = settings.SCREEN_WIDTH - bar_w - pad 
+        bar_y = settings.SCREEN_HEIGHT - bar_h - 48  # altura da barra de força
 
         pct = (self.current_throw_force - settings.THROW_FORCE_MIN) / (
             settings.THROW_FORCE_MAX - settings.THROW_FORCE_MIN
         )
         pct = max(0.0, min(1.0, pct))
 
-        # Fundo e borda.
+        # Fundo sutil arredondado cobrindo label + barra.
+        label = self.small_font.render("Força:", True, settings.COLOR_TEXT)
+        label_gap = 8
+        total_w = label.get_width() + label_gap + bar_w
+        _fbp_x, _fbp_y = 10, 7
+        _fbar_bg = pygame.Surface(
+            (total_w + _fbp_x * 2, bar_h + _fbp_y * 2),
+            pygame.SRCALPHA,
+        )
+        pygame.draw.rect(
+            _fbar_bg,
+            (8, 14, 22, 140),
+            _fbar_bg.get_rect(),
+            border_radius=8,
+        )
+        bg_x = bar_x - label.get_width() - label_gap - _fbp_x
+        bg_y = bar_y - _fbp_y
+        self.screen.blit(_fbar_bg, (bg_x, bg_y))
+
+        # Fundo e borda da barra.
         pygame.draw.rect(self.screen, (20, 26, 40), (bar_x, bar_y, bar_w, bar_h), border_radius=4)
         pygame.draw.rect(self.screen, settings.COLOR_LINES, (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=4)
 
@@ -1247,8 +1295,7 @@ class FreeThrowGame:
             )
 
         # Label "Forca" a esquerda da barra.
-        label = self.small_font.render("Força:", True, settings.COLOR_TEXT)
-        self.screen.blit(label, (bar_x - label.get_width() - 8, bar_y - 1))
+        self.screen.blit(label, (bar_x - label.get_width() - label_gap, bar_y - 1))
 
     def _draw_round_end_overlay(self) -> None:
         if self.attempts_used < settings.MAX_ATTEMPTS:
