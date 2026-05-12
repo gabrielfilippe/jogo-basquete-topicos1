@@ -1,28 +1,32 @@
-# Jogo de Basquete - Lances Livres (Pygame)
+# Jogo de Basquete - Arremessos (Pygame)
 
 Projeto inicial para a disciplina de Topicos 1.
-A proposta e desenvolver um jogo de lances livres com fisica simples, pontuacao e feedback visual.
+A proposta e desenvolver um jogo de arremessos com fisica simples, pontuação e feedback visual.
 
 ## Escopo inicial (MVP)
 - Janela e loop principal com `pygame`
-- Cenario de quadra simplificado
-- Bola com gravidade e lancamento parametrico
-- Regras de cesta, pontuacao e tentativas
+- Cenário de quadra simplificado
+- Bola com gravidade e lançamento parametrico
+- Regras de cesta, pontuação e tentativas
 
 ## Como executar
-# 1. Ative o ambiente virtual
-source .venv/bin/activate
+# 1. Crie e ative o ambiente virtual
+
+Para criar no linux - python3 -m venv .venv 
+
+Para criar no windows - python -m venv .venv
+
+Para ativar - source .venv/bin/activate
 
 # 2. Instale as dependências (incluindo pygame)
+
 pip install -r requirements.txt
 
 # 3. Rode o jogo
-python -m src.main
 
-# 3. Rode o jogo no linux
+Para rodar no linux - python3 -m src.main
 
-python3 -m src.main
-
+Para rodar no windows - python -m src.main
 
 ## Estrutura
 
@@ -45,14 +49,15 @@ jogo-basquete-topicos1/
 ```
 
 ## Controles (parte 1)
+
 - `Qualquer tecla` ou `clique`: inicia o jogo na tela inicial
-- `Clique e arraste` na bola: mira e define forca do arremesso
-- `Solte o botao esquerdo`: lanca a bola
+- `Clique e arraste` na bola: mira e define força do arremesso
+- `Solte o botao esquerdo`: lança a bola
 - `R`: reseta a bola para nova tentativa
 - `N`: reinicia placar e tentativas
 
 ## O que ja esta implementado
-- Colisao da bola com os dois pontos do aro
+- Colisão da bola com os dois pontos do aro
 - Colisao da bola com a tabela
 - Deteccao de cesta valida (bola descendo por dentro do aro)
 - Placar e limite de 10 tentativas
