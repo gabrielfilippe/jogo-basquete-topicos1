@@ -29,6 +29,8 @@ class FreeThrowGame:
         self.static_background = self._build_static_background()
         self.start_screen_background = self._load_start_screen_background()
         self.at_three_point_line = False  # False = lance livre, True = linha de 3
+        self.walk_active = False          # precisa existir antes de _get_ball_rest_position()
+        self.walk_player_pos = pygame.Vector2(0, 0)
         ball_rest_pos = self._get_ball_rest_position()
 
         self.ball_pos = pygame.Vector2(ball_rest_pos)
@@ -60,6 +62,15 @@ class FreeThrowGame:
         self.throw_anim_end_index = 0
         self.throw_ball_released = False
         self.pending_throw_velocity = pygame.Vector2(0, 0)
+
+        # Animacao de caminhada (transicao de posicao)
+        self.walk_frames = self._load_walk_frames()
+        self.walk_active = False
+        self.walk_time = 0.0
+        self.walk_frame_index = 0
+        self.walk_start_pos = pygame.Vector2(0, 0)
+        self.walk_target_pos = pygame.Vector2(0, 0)
+        self.walk_player_pos = pygame.Vector2(0, 0)  # posicao interpolada durante a caminhada
 
         # Botao "Como Jogar" no canto inferior direito da tela inicial.
         btn_w, btn_h = 160, 38
@@ -292,6 +303,10 @@ class FreeThrowGame:
         self._update_status_timer(dt)
         self._update_feedback_flash_timer(dt)
         self._update_throw_animation(dt)
+        self._update_walk_transition(dt)
+
+        if self.walk_active:
+            return
 
         if self.dragging_shot and not self.ball_in_flight:
             self._sync_ball_to_pose(1)
@@ -320,6 +335,8 @@ class FreeThrowGame:
         if self.ball_in_flight:
             return
         if self.throw_anim_active:
+            return
+        if self.walk_active:
             return
         if self.attempts_used >= settings.MAX_ATTEMPTS:
             self._set_status("Sem tentativas. Pressione N para novo jogo.", settings.COLOR_ACCENT, 2.0)
@@ -422,6 +439,7 @@ class FreeThrowGame:
         self.score = 0
         self.attempts_used = 0
         self.at_three_point_line = False
+        self.walk_active = False
         self._reset_ball()
         self._set_status("Novo jogo iniciado.", settings.COLOR_ACCENT, 1.2)
 
@@ -684,9 +702,12 @@ class FreeThrowGame:
     def _finalize_shot(self, auto_miss: bool) -> None:
         if auto_miss:
             if self.at_three_point_line:
-                # Errou da linha de 3: volta para o lance livre.
-                self.at_three_point_line = False
+                # Errou da linha de 3: volta para o lance livre com animacao de caminhada.
                 self._set_status("Errou!  →  Lance Livre", settings.COLOR_FAILURE, 1.6)
+                self._trigger_feedback_flash(settings.COLOR_FAILURE)
+                self._reset_ball()
+                self._start_walk_transition()
+                return
             else:
                 self._set_status("Errou o lance.", settings.COLOR_FAILURE, 1.6)
             self._trigger_feedback_flash(settings.COLOR_FAILURE)
@@ -751,7 +772,100 @@ class FreeThrowGame:
             return (int(number_chunks[-1]), stem)
         return (10**9, stem)
 
+    # ------------------------------------------------------------------
+    # Caminhada (transicao de posicao: linha de 3 → lance livre)
+    # ------------------------------------------------------------------
+
+    def _load_walk_frames(self) -> list[pygame.Surface]:
+        """Carrega running1.png .. running4.png como frames de caminhada."""
+        assets_dir = Path(__file__).resolve().parents[1] / "assets" / "images" / "player"
+        frame_paths = sorted(assets_dir.glob("running*.png"), key=self._frame_sort_key)
+
+        frames: list[pygame.Surface] = []
+        for image_path in frame_paths:
+            try:
+                loaded = pygame.image.load(str(image_path)).convert_alpha()
+            except pygame.error:
+                continue
+
+            source_height = max(1, loaded.get_height())
+            scale = settings.WALK_IMAGE_HEIGHT / source_height
+            target_width = max(1, int(loaded.get_width() * scale))
+            frame = pygame.transform.smoothscale(loaded, (target_width, settings.WALK_IMAGE_HEIGHT))
+            frames.append(frame)
+
+        return frames
+
+    def _start_walk_transition(self) -> None:
+        """Inicia a animacao de caminhada da linha de 3 para o lance livre.
+
+        Chamado apos errar da linha de 3. O jogador ainda esta em
+        at_three_point_line=True quando este metodo e chamado; a flag so
+        muda para False ao fim da transicao.
+        """
+        if not self.walk_frames:
+            # Sem sprites: teleporta e muda posicao imediatamente.
+            self.at_three_point_line = False
+            self._reset_ball()
+            return
+
+        start_x = float(settings.PLAYER_BASE_X_THREE_POINT)
+        start_y = float(settings.PLAYER_BASE_Y_THREE_POINT)
+        target_x = float(settings.PLAYER_BASE_X_FREETHROW)
+        target_y = float(settings.PLAYER_BASE_Y_FREETHROW)
+
+        self.walk_start_pos.update(start_x, start_y)
+        self.walk_target_pos.update(target_x, target_y)
+        self.walk_player_pos.update(start_x, start_y)
+        self.walk_time = 0.0
+        self.walk_frame_index = 0
+        self.walk_active = True
+
+    def _update_walk_transition(self, dt: float) -> None:
+        """Avanca a animacao de caminhada a cada frame."""
+        if not self.walk_active:
+            return
+
+        self.walk_time += dt
+        total = settings.WALK_TOTAL_DURATION
+
+        # Interpola posicao com ease-in-out suave (curva cosseno).
+        t = min(1.0, self.walk_time / total)
+        t_ease = (1.0 - math.cos(t * math.pi)) / 2.0
+        self.walk_player_pos.x = self.walk_start_pos.x + (self.walk_target_pos.x - self.walk_start_pos.x) * t_ease
+        self.walk_player_pos.y = self.walk_start_pos.y + (self.walk_target_pos.y - self.walk_start_pos.y) * t_ease
+
+        # Cicla os frames de running enquanto anda.
+        frame_count = len(self.walk_frames)
+        if frame_count > 0:
+            cycle_time = settings.WALK_FRAME_DURATION * frame_count
+            self.walk_frame_index = int((self.walk_time % cycle_time) / settings.WALK_FRAME_DURATION) % frame_count
+
+        # Fim da transicao.
+        if self.walk_time >= total:
+            self.walk_active = False
+            self.at_three_point_line = False
+            self._reset_ball()
+
+    def _draw_walk_frame(self) -> None:
+        """Desenha o frame atual de caminhada na posicao interpolada."""
+        if not self.walk_frames:
+            return
+
+        safe_index = max(0, min(self.walk_frame_index, len(self.walk_frames) - 1))
+        frame = self.walk_frames[safe_index]
+        base_x, base_y = self._get_player_base_position()
+        image_rect = frame.get_rect()
+        image_rect.midbottom = (
+            int(base_x + settings.THROW_IMAGE_OFFSET_X),
+            int(base_y + settings.THROW_IMAGE_OFFSET_Y),
+        )
+        self.screen.blit(frame, image_rect)
+
     def _draw_player(self) -> None:
+        if self.walk_active and self.walk_frames:
+            self._draw_walk_frame()
+            return
         if self.throw_anim_active and self.throw_frames:
             self._draw_throw_animation_frame()
             return
@@ -1098,6 +1212,8 @@ class FreeThrowGame:
         pygame.draw.circle(self.screen, (58, 64, 80), (int(hand_x), int(hand_y)), 6)
 
     def _get_player_base_position(self) -> tuple[float, float]:
+        if self.walk_active:
+            return (self.walk_player_pos.x, self.walk_player_pos.y)
         if self.at_three_point_line:
             return (settings.PLAYER_BASE_X_THREE_POINT, settings.PLAYER_BASE_Y_THREE_POINT)
         return (settings.PLAYER_BASE_X_FREETHROW, settings.PLAYER_BASE_Y_FREETHROW)

@@ -45,6 +45,11 @@ THROW_IMAGE_OFFSET_X = 80
 THROW_IMAGE_OFFSET_Y = 70
 THROW_FRAME_DURATION = 0.11
 
+# Animacao de caminhada (transicao de posicao)
+WALK_FRAME_DURATION = 0.35 # segundos por frame (4 frames = ~0.52 s por ciclo)
+WALK_TOTAL_DURATION = 2.0   # duracao total da transicao em segundos
+WALK_IMAGE_HEIGHT = 200     # altura dos sprites de running (mesma do throw)
+
 # Parametros de gameplay (parte 1)
 BALL_RADIUS = 12
 BALL_START_X = 190
