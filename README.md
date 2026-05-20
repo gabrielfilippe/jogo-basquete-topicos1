@@ -1,66 +1,61 @@
-# Jogo de Basquete - Lances Livres (Pygame)
+# 🏀 Jogo de Basquete — Arremessos
 
-Projeto inicial para a disciplina de Topicos 1.
-A proposta e desenvolver um jogo de lances livres com fisica simples, pontuacao e feedback visual.
+Projeto desenvolvido para a disciplina de Tópicos 1.  
+Um jogo de arremessos de basquete com física simples, animações e sistema de pontuação alternado entre lance livre e linha de 3 pontos.
 
-## Escopo inicial (MVP)
-- Janela e loop principal com `pygame`
-- Cenario de quadra simplificado
-- Bola com gravidade e lancamento parametrico
-- Regras de cesta, pontuacao e tentativas
+---
+
+## Tecnologias
+
+- Python 3.10+
+- [Pygame](https://www.pygame.org/) >= 2.5.0
+
+---
 
 ## Como executar
-# 1. Ative o ambiente virtual
-source .venv/bin/activate
 
-# 2. Instale as dependências (incluindo pygame)
-pip install -r requirements.txt
-
-# 3. Rode o jogo
-python -m src.main
-
-# 3. Rode o jogo no linux
-
-python3 -m src.main
+Consulte o passo a passo detalhado em (docs/tutorial_para_rodar_o_jogo.md).
 
 
-## Estrutura
+## Controles
+
+| Ação | Controle |
+|---|---|
+| Iniciar o jogo | Qualquer tecla ou clique na tela inicial |
+| Mirar e definir força | Clicar e arrastar o mouse na bola |
+| Arremessar | Soltar o botão esquerdo do mouse |
+| Resetar a bola | `R` |
+| Nova partida | `N` |
+
+---
+
+## Estrutura do projeto
 
 ```
 jogo-basquete-topicos1/
 ├── src/
-│   ├── main.py          # ponto de entrada
-│   ├── game.py          # classe principal e loop do jogo
-│   └── settings.py      # configuracoes e constantes globais
+│   ├── main.py        # ponto de entrada
+│   ├── game.py        # loop principal e renderização
+│   └── settings.py    # constantes e configurações globais
 ├── assets/
 │   ├── images/
-│   │   ├── player/      # frames de animacao do jogador (process_*.png)
-│   │   ├── court/       # fundo da quadra (quadrabasquete.png)
-│   │   └── ui/          # tela inicial e elementos de interface
-│   ├── sounds/          # sons (futuro)
-│   └── fonts/           # fontes customizadas (futuro)
-├── docs/                # documentacao e acompanhamento do projeto
+│   │   ├── player/    # frames de animação do jogador
+│   │   ├── court/     # imagem de fundo da quadra
+│   │   └── ui/        # tela inicial e interface
+│   └── sounds/        # sons (a implementar)
+├── docs/              # documentação do projeto
 ├── requirements.txt
 └── README.md
 ```
 
-## Controles (parte 1)
-- `Qualquer tecla` ou `clique`: inicia o jogo na tela inicial
-- `Clique e arraste` na bola: mira e define forca do arremesso
-- `Solte o botao esquerdo`: lanca a bola
-- `R`: reseta a bola para nova tentativa
-- `N`: reinicia placar e tentativas
+---
 
-## O que ja esta implementado
-- Colisao da bola com os dois pontos do aro
-- Colisao da bola com a tabela
-- Deteccao de cesta valida (bola descendo por dentro do aro)
-- Placar e limite de 10 tentativas
-- Quique no chao com atrito e encerramento automatico da jogada
-- Feedback visual de acerto/erro no aro
-- Tela final da rodada com aproveitamento
+## Funcionalidades implementadas
 
-## Proximos passos
-- Adicionar sons para acerto, aro e tabela
-- Criar nivel de dificuldade com variacao de distancia
-- Refinar animacoes (rede e celebracao de cesta)
+- Física de arremesso com gravidade e trajetória parabólica.
+- Colisão com o aro (nós esquerdo e direito) e com a tabela.
+- Detecção de cesta válida (bola descendo por dentro do aro) - Precisa ser refinado. Funciona na maioria das vezes, mas em alguns casos nao reconhece a cesta.
+- Sistema de pontuação alternado: lance livre (1 pt) → linha de 3 (3 pts) - Acertou o lance livre vai para a linha de 3 pontos, errou volta para o lance livre.
+- Limite de 10 tentativas por rodada com tela de resultado final
+- Animação de arremesso por frames
+- Feedback visual de acerto e erro

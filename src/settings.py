@@ -45,6 +45,11 @@ THROW_IMAGE_OFFSET_X = 80
 THROW_IMAGE_OFFSET_Y = 70
 THROW_FRAME_DURATION = 0.11
 
+# Animacao de caminhada (transicao de posicao)
+WALK_FRAME_DURATION = 0.35 # segundos por frame (4 frames = ~0.52 s por ciclo)
+WALK_TOTAL_DURATION = 2.0   # duracao total da transicao em segundos
+WALK_IMAGE_HEIGHT = 200     # altura dos sprites de running (mesma do throw)
+
 # Parametros de gameplay (parte 1)
 BALL_RADIUS = 12
 BALL_START_X = 190
@@ -95,7 +100,7 @@ RIM_RIGHT_X = 862
 RIM_NODE_RADIUS = 7
 
 BACKBOARD_X = 875
-BACKBOARD_Y = 45     # era 64 — ajustado junto com RIM_Y
+BACKBOARD_Y = 45     
 BACKBOARD_WIDTH = 10
 BACKBOARD_HEIGHT = 150
 
@@ -123,6 +128,9 @@ COLOR_BALL = (235, 137, 55)
 COLOR_BOARD = (202, 216, 228)
 COLOR_SUCCESS = (255, 198, 88)
 COLOR_FAILURE = (210, 230, 242)
+COLOR_SUCCESS = (0, 255, 0)
+
+
 
 COLOR_SKY_TOP = (57, 66, 116)
 COLOR_SKY_MID = (152, 92, 102)

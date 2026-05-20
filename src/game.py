@@ -29,6 +29,8 @@ class FreeThrowGame:
         self.static_background = self._build_static_background()
         self.start_screen_background = self._load_start_screen_background()
         self.at_three_point_line = False  # False = lance livre, True = linha de 3
+        self.walk_active = False          # precisa existir antes de _get_ball_rest_position()
+        self.walk_player_pos = pygame.Vector2(0, 0)
         ball_rest_pos = self._get_ball_rest_position()
 
         self.ball_pos = pygame.Vector2(ball_rest_pos)
@@ -61,6 +63,15 @@ class FreeThrowGame:
         self.throw_ball_released = False
         self.pending_throw_velocity = pygame.Vector2(0, 0)
 
+        # Animacao de caminhada (transicao de posicao)
+        self.walk_frames = self._load_walk_frames()
+        self.walk_active = False
+        self.walk_time = 0.0
+        self.walk_frame_index = 0
+        self.walk_start_pos = pygame.Vector2(0, 0)
+        self.walk_target_pos = pygame.Vector2(0, 0)
+        self.walk_player_pos = pygame.Vector2(0, 0)  # posicao interpolada durante a caminhada
+
         # Botao "Como Jogar" no canto inferior direito da tela inicial.
         btn_w, btn_h = 160, 38
         padding = 20
@@ -75,6 +86,8 @@ class FreeThrowGame:
         """Executa o loop principal."""
         self._show_start_screen()
 
+        # dt = tempo em segundos desde o ultimo frame. Garante que a fisica
+        # seja a mesma independente de quantos FPS a maquina consegue rodar.
         while self.running:
             dt = self.clock.tick(settings.FPS) / 1000.0
             self._handle_events()
@@ -230,7 +243,7 @@ class FreeThrowGame:
         y += section_h
         for line in [
             "Alterne entre Lance Livre (1pt) e Linha de 3 (3pts).",
-            "Acerte do lance livre para avançar à linha de 3!",
+            "Acerte o lance livre para avançar à linha de 3!",
         ]:
             s = self.small_font.render(line, True, settings.COLOR_TEXT)
             self.screen.blit(s, (cx - s.get_width() // 2, y))
@@ -245,7 +258,8 @@ class FreeThrowGame:
             "1° - Clique na bola para mirar.",
             "2° - Arraste o mouse para mirar e definir a força.",
             "3° - Solte o botão para arremessar.",
-            "   Dica: Arraste mais longe para mais força!",
+            "   OBS: O final da parabola não indica necessariamente onde a bola vai cair,",
+            "        ela serve para auxiliar na mira do arremesso.",
         ]:
             s = self.small_font.render(line, True, settings.COLOR_TEXT)
             self.screen.blit(s, (cx - s.get_width() // 2, y))
@@ -291,6 +305,11 @@ class FreeThrowGame:
         self._update_status_timer(dt)
         self._update_feedback_flash_timer(dt)
         self._update_throw_animation(dt)
+        self._update_walk_transition(dt)
+
+        # Se o jogador esta caminhando para outra posicao, pausa tudo.
+        if self.walk_active:
+            return
 
         if self.dragging_shot and not self.ball_in_flight:
             self._sync_ball_to_pose(1)
@@ -298,12 +317,14 @@ class FreeThrowGame:
         if not self.ball_in_flight:
             return
 
+        # --- Fisica da bola em voo ---
         self.shot_time += dt
         prev_pos = pygame.Vector2(self.ball_pos)
+        # Aplica gravidade: acelera a bola para baixo a cada frame.
         self.ball_vel.y += settings.GRAVITY * dt
         self.ball_pos += self.ball_vel * dt
 
-        # Valida cesta antes das colisoes para evitar rejeicao indevida no aro.
+        # A cesta e checada antes das colisoes para nao rejeitar uma entrada valida.
         self._check_made_basket(prev_pos)
         self._resolve_hoop_collisions()
         self._resolve_floor_collision()
@@ -319,6 +340,8 @@ class FreeThrowGame:
         if self.ball_in_flight:
             return
         if self.throw_anim_active:
+            return
+        if self.walk_active:
             return
         if self.attempts_used >= settings.MAX_ATTEMPTS:
             self._set_status("Sem tentativas. Pressione N para novo jogo.", settings.COLOR_ACCENT, 2.0)
@@ -346,16 +369,19 @@ class FreeThrowGame:
         self._update_drag_aim_and_force()
 
     def _update_drag_aim_and_force(self) -> None:
+        # Vetor do ponto de clique ate onde o mouse esta agora.
         drag_vec = self.drag_current_pos - self.ball_pos
         drag_distance = drag_vec.length()
         if drag_distance <= 0.0001:
             return
 
-        # Usa o vetor de arrasto para definir direcao de arremesso.
+        # O angulo de arremesso e o oposto da direcao do arrasto:
+        # arrastar para baixo/esquerda = arremessar para cima/direita.
         dy_up = -drag_vec.y
         angle_deg = math.degrees(math.atan2(dy_up, drag_vec.x))
         self.angle_deg = max(settings.ANGLE_MIN, min(settings.ANGLE_MAX, angle_deg))
 
+        # Quanto maior a distancia do arrasto, maior a forca (limitada ao maximo).
         t = drag_distance / settings.DRAG_MAX_DISTANCE_PX
         t = max(0.0, min(1.0, t))
         self.current_throw_force = (
@@ -384,6 +410,8 @@ class FreeThrowGame:
             self._set_status("Sem tentativas. Pressione N para novo jogo.", settings.COLOR_ACCENT, 2.0)
             return
 
+        # Converte angulo e forca em um vetor de velocidade inicial.
+        # cos = componente horizontal, sin = componente vertical (negativo = para cima).
         angle_rad = math.radians(self.angle_deg)
         self.pending_throw_velocity = pygame.Vector2(
             math.cos(angle_rad) * self.current_throw_force,
@@ -421,6 +449,7 @@ class FreeThrowGame:
         self.score = 0
         self.attempts_used = 0
         self.at_three_point_line = False
+        self.walk_active = False
         self._reset_ball()
         self._set_status("Novo jogo iniciado.", settings.COLOR_ACCENT, 1.2)
 
@@ -559,6 +588,8 @@ class FreeThrowGame:
         if self.ball_vel.y <= 0:
             return
 
+        # Bola tocou o chao: inverte a velocidade vertical com amortecimento
+        # e aplica atrito horizontal para simular o quique.
         self.ball_pos.y = floor_level
         self.ball_vel.y = -abs(self.ball_vel.y) * settings.FLOOR_BOUNCE
         self.ball_vel.x *= settings.FLOOR_FRICTION
@@ -658,15 +689,17 @@ class FreeThrowGame:
             if self.at_three_point_line:
                 # Na linha de 3: vale 3 pontos, permanece na linha de 3.
                 self.score += settings.THREE_POINT_SCORE
-                self._set_status("CESTA DE 3!  +3 pts", settings.COLOR_ACCENT, 1.8)
+                self._set_status("CESTA DE 3!  +3 pts", settings.COLOR_SUCCESS, 1.8)
             else:
                 # No lance livre: vale 1 ponto, avanca para linha de 3.
                 self.score += settings.FREETHROW_SCORE
                 self.at_three_point_line = True
-                self._set_status("Cesta!  +1 pt  →  Linha de 3", settings.COLOR_ACCENT, 1.8)
+                self._set_status("Cesta!  +1 pt  →  Linha de 3", settings.COLOR_SUCCESS, 1.8)
             self._trigger_feedback_flash(settings.COLOR_SUCCESS)
 
     def _should_end_shot(self) -> bool:
+        # Encerra a jogada se passou tempo demais, quicou muito,
+        # ou a bola parou no chao (velocidade baixa o suficiente).
         if not self.ball_in_flight:
             return False
         if self.shot_time >= settings.SHOT_MAX_TIME:
@@ -683,9 +716,12 @@ class FreeThrowGame:
     def _finalize_shot(self, auto_miss: bool) -> None:
         if auto_miss:
             if self.at_three_point_line:
-                # Errou da linha de 3: volta para o lance livre.
-                self.at_three_point_line = False
+                # Errou da linha de 3: volta para o lance livre com animacao de caminhada.
                 self._set_status("Errou!  →  Lance Livre", settings.COLOR_FAILURE, 1.6)
+                self._trigger_feedback_flash(settings.COLOR_FAILURE)
+                self._reset_ball()
+                self._start_walk_transition()
+                return
             else:
                 self._set_status("Errou o lance.", settings.COLOR_FAILURE, 1.6)
             self._trigger_feedback_flash(settings.COLOR_FAILURE)
@@ -750,7 +786,100 @@ class FreeThrowGame:
             return (int(number_chunks[-1]), stem)
         return (10**9, stem)
 
+    # ------------------------------------------------------------------
+    # Caminhada (transicao de posicao: linha de 3 → lance livre)
+    # ------------------------------------------------------------------
+
+    def _load_walk_frames(self) -> list[pygame.Surface]:
+        """Carrega running1.png .. running4.png como frames de caminhada."""
+        assets_dir = Path(__file__).resolve().parents[1] / "assets" / "images" / "player"
+        frame_paths = sorted(assets_dir.glob("running*.png"), key=self._frame_sort_key)
+
+        frames: list[pygame.Surface] = []
+        for image_path in frame_paths:
+            try:
+                loaded = pygame.image.load(str(image_path)).convert_alpha()
+            except pygame.error:
+                continue
+
+            source_height = max(1, loaded.get_height())
+            scale = settings.WALK_IMAGE_HEIGHT / source_height
+            target_width = max(1, int(loaded.get_width() * scale))
+            frame = pygame.transform.smoothscale(loaded, (target_width, settings.WALK_IMAGE_HEIGHT))
+            frames.append(frame)
+
+        return frames
+
+    def _start_walk_transition(self) -> None:
+        """Inicia a animacao de caminhada da linha de 3 para o lance livre.
+
+        Chamado apos errar da linha de 3. O jogador ainda esta em
+        at_three_point_line=True quando este metodo e chamado; a flag so
+        muda para False ao fim da transicao.
+        """
+        if not self.walk_frames:
+            # Sem sprites: teleporta e muda posicao imediatamente.
+            self.at_three_point_line = False
+            self._reset_ball()
+            return
+
+        start_x = float(settings.PLAYER_BASE_X_THREE_POINT)
+        start_y = float(settings.PLAYER_BASE_Y_THREE_POINT)
+        target_x = float(settings.PLAYER_BASE_X_FREETHROW)
+        target_y = float(settings.PLAYER_BASE_Y_FREETHROW)
+
+        self.walk_start_pos.update(start_x, start_y)
+        self.walk_target_pos.update(target_x, target_y)
+        self.walk_player_pos.update(start_x, start_y)
+        self.walk_time = 0.0
+        self.walk_frame_index = 0
+        self.walk_active = True
+
+    def _update_walk_transition(self, dt: float) -> None:
+        """Avanca a animacao de caminhada a cada frame."""
+        if not self.walk_active:
+            return
+
+        self.walk_time += dt
+        total = settings.WALK_TOTAL_DURATION
+
+        # Interpola posicao com ease-in-out suave (curva cosseno).
+        t = min(1.0, self.walk_time / total)
+        t_ease = (1.0 - math.cos(t * math.pi)) / 2.0
+        self.walk_player_pos.x = self.walk_start_pos.x + (self.walk_target_pos.x - self.walk_start_pos.x) * t_ease
+        self.walk_player_pos.y = self.walk_start_pos.y + (self.walk_target_pos.y - self.walk_start_pos.y) * t_ease
+
+        # Cicla os frames de running enquanto anda.
+        frame_count = len(self.walk_frames)
+        if frame_count > 0:
+            cycle_time = settings.WALK_FRAME_DURATION * frame_count
+            self.walk_frame_index = int((self.walk_time % cycle_time) / settings.WALK_FRAME_DURATION) % frame_count
+
+        # Fim da transicao.
+        if self.walk_time >= total:
+            self.walk_active = False
+            self.at_three_point_line = False
+            self._reset_ball()
+
+    def _draw_walk_frame(self) -> None:
+        """Desenha o frame atual de caminhada na posicao interpolada."""
+        if not self.walk_frames:
+            return
+
+        safe_index = max(0, min(self.walk_frame_index, len(self.walk_frames) - 1))
+        frame = self.walk_frames[safe_index]
+        base_x, base_y = self._get_player_base_position()
+        image_rect = frame.get_rect()
+        image_rect.midbottom = (
+            int(base_x + settings.THROW_IMAGE_OFFSET_X),
+            int(base_y + settings.THROW_IMAGE_OFFSET_Y),
+        )
+        self.screen.blit(frame, image_rect)
+
     def _draw_player(self) -> None:
+        if self.walk_active and self.walk_frames:
+            self._draw_walk_frame()
+            return
         if self.throw_anim_active and self.throw_frames:
             self._draw_throw_animation_frame()
             return
@@ -1097,6 +1226,8 @@ class FreeThrowGame:
         pygame.draw.circle(self.screen, (58, 64, 80), (int(hand_x), int(hand_y)), 6)
 
     def _get_player_base_position(self) -> tuple[float, float]:
+        if self.walk_active:
+            return (self.walk_player_pos.x, self.walk_player_pos.y)
         if self.at_three_point_line:
             return (settings.PLAYER_BASE_X_THREE_POINT, settings.PLAYER_BASE_Y_THREE_POINT)
         return (settings.PLAYER_BASE_X_FREETHROW, settings.PLAYER_BASE_Y_FREETHROW)
@@ -1178,10 +1309,10 @@ class FreeThrowGame:
 
         # --- Indicador de posicao atual (canto superior esquerdo) ---
         if self.at_three_point_line:
-            position_label = "🏀  Linha de 3 Pontos"
-            pos_color = settings.COLOR_ACCENT
+            position_label = "Linha de 3 Pontos"
+            pos_color = settings.COLOR_TEXT
         else:
-            position_label = "🏀  Lance Livre"
+            position_label = "Linha de Lance Livre"
             pos_color = settings.COLOR_TEXT
         pos_surface = self.small_font.render(position_label, True, pos_color)
         self.screen.blit(pos_surface, (pad, pad))
@@ -1191,6 +1322,20 @@ class FreeThrowGame:
         score_surface = self.small_font.render(score_text, True, settings.COLOR_TEXT)
         score_x = settings.SCREEN_WIDTH - score_surface.get_width() - pad
         score_y = settings.SCREEN_HEIGHT - score_surface.get_height() - pad
+
+        # Fundo sutil arredondado atras do placar.
+        _bg_px, _bg_py = 10, 3
+        _score_bg = pygame.Surface(
+            (score_surface.get_width() + _bg_px * 2, score_surface.get_height() + _bg_py * 2),
+            pygame.SRCALPHA,
+        )
+        pygame.draw.rect(
+            _score_bg,
+            (8, 14, 22, 140),
+            _score_bg.get_rect(),
+            border_radius=8,
+        )
+        self.screen.blit(_score_bg, (score_x - _bg_px, score_y - _bg_py))
         self.screen.blit(score_surface, (score_x, score_y))
 
         # Aviso de fim de tentativas centralizado no topo.
@@ -1200,35 +1345,87 @@ class FreeThrowGame:
             hint_x = settings.SCREEN_WIDTH // 2 - hint_surface.get_width() // 2
             self.screen.blit(hint_surface, (hint_x, 44))
 
-        # --- Barra de forca no canto inferior direito (acima do placar) ---
-        self._draw_force_bar()
+        # --- Barra de forca alinhada com o placar (acima dele) ---
+        # Passa a borda esquerda e a largura do placar para garantir alinhamento.
+        self._draw_force_bar(score_x, score_surface.get_width(), score_y)
 
-        # --- Mensagem de feedback centralizada na tela ---
+        # --- Mensagem de feedback: posicao propria, independente do placar ---
         if self.status_timer > 0.0:
             status_surface = self.font.render(self.status_text, True, self.status_color)
             status_x = settings.SCREEN_WIDTH // 2 - status_surface.get_width() // 2
-            self.screen.blit(status_surface, (status_x, settings.SCREEN_HEIGHT // 2 - 60))
+            status_y = settings.SCREEN_HEIGHT - status_surface.get_height() - 55
 
-    def _draw_force_bar(self) -> None:
-        """Barra de forca horizontal ancorada no canto inferior direito.
+            # Fundo sutil arredondado atras da mensagem de feedback.
+            _fbg_px, _fbg_py = 14, 7
+            _status_bg = pygame.Surface(
+                (status_surface.get_width() + _fbg_px * 2, status_surface.get_height() + _fbg_py * 2),
+                pygame.SRCALPHA,
+            )
+            pygame.draw.rect(
+                _status_bg,
+                (8, 14, 22, 140),
+                _status_bg.get_rect(),
+                border_radius=10,
+            )
+            self.screen.blit(_status_bg, (status_x - _fbg_px, status_y - _fbg_py))
+            self.screen.blit(status_surface, (status_x, status_y))
+
+    def _draw_force_bar(
+        self,
+        score_x: int,
+        score_w: int,
+        score_y: int,
+    ) -> None:
+        """Barra de forca horizontal alinhada ao placar.
+
+        score_x  — borda esquerda do texto do placar
+        score_w  — largura do texto do placar
+        score_y  — topo do texto do placar (a barra e posicionada acima dele)
         Aparece apenas enquanto o jogador esta arrastando para arremessar.
         """
         if not self.dragging_shot:
             return
 
-        pad = 16
-        bar_w = 200
         bar_h = 12
-        # Posicionada acima do texto de placar (que tem ~20px de altura + pad).
-        bar_x = settings.SCREEN_WIDTH - bar_w - pad
-        bar_y = settings.SCREEN_HEIGHT - bar_h - 44
+        label = self.small_font.render("Força:", True, settings.COLOR_TEXT)
+        label_gap = 8
+
+        # A barra ocupa o espaco a direita do label, dentro da largura do placar.
+        # label | gap | ========barra========
+        # |<-----------score_w------------->|
+        bar_w = score_w - label.get_width() - label_gap
+        bar_w = max(bar_w, 40)  # minimo de seguranca
+
+        # Alinha horizontalmente com o placar.
+        bar_x = score_x + label.get_width() + label_gap
+
+        # Posiciona acima do placar com uma pequena margem.
+        row_gap = 14  # espaco vertical entre a barra de forca e o placar
+        bar_y = score_y - bar_h - row_gap
+        # Centraliza a barra verticalmente em relacao ao label.
+        label_y = bar_y + (bar_h - label.get_height()) // 2
 
         pct = (self.current_throw_force - settings.THROW_FORCE_MIN) / (
             settings.THROW_FORCE_MAX - settings.THROW_FORCE_MIN
         )
         pct = max(0.0, min(1.0, pct))
 
-        # Fundo e borda.
+        # Fundo sutil arredondado cobrindo label + barra (mesmo padding do placar).
+        _fbp_x, _fbp_y = 10, 6
+        total_w = label.get_width() + label_gap + bar_w
+        _fbar_bg = pygame.Surface(
+            (total_w + _fbp_x * 2, bar_h + _fbp_y * 2),
+            pygame.SRCALPHA,
+        )
+        pygame.draw.rect(
+            _fbar_bg,
+            (8, 14, 22, 140),
+            _fbar_bg.get_rect(),
+            border_radius=8,
+        )
+        self.screen.blit(_fbar_bg, (score_x - _fbp_x, bar_y - _fbp_y))
+
+        # Fundo e borda da barra.
         pygame.draw.rect(self.screen, (20, 26, 40), (bar_x, bar_y, bar_w, bar_h), border_radius=4)
         pygame.draw.rect(self.screen, settings.COLOR_LINES, (bar_x, bar_y, bar_w, bar_h), width=1, border_radius=4)
 
@@ -1246,9 +1443,8 @@ class FreeThrowGame:
                 border_radius=3,
             )
 
-        # Label "Forca" a esquerda da barra.
-        label = self.small_font.render("Força:", True, settings.COLOR_TEXT)
-        self.screen.blit(label, (bar_x - label.get_width() - 8, bar_y - 1))
+        # Label "Forca:" alinhado a esquerda, verticalmente centrado com a barra.
+        self.screen.blit(label, (score_x, label_y))
 
     def _draw_round_end_overlay(self) -> None:
         if self.attempts_used < settings.MAX_ATTEMPTS:
