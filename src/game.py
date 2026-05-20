@@ -86,6 +86,8 @@ class FreeThrowGame:
         """Executa o loop principal."""
         self._show_start_screen()
 
+        # dt = tempo em segundos desde o ultimo frame. Garante que a fisica
+        # seja a mesma independente de quantos FPS a maquina consegue rodar.
         while self.running:
             dt = self.clock.tick(settings.FPS) / 1000.0
             self._handle_events()
@@ -305,6 +307,7 @@ class FreeThrowGame:
         self._update_throw_animation(dt)
         self._update_walk_transition(dt)
 
+        # Se o jogador esta caminhando para outra posicao, pausa tudo.
         if self.walk_active:
             return
 
@@ -314,12 +317,14 @@ class FreeThrowGame:
         if not self.ball_in_flight:
             return
 
+        # --- Fisica da bola em voo ---
         self.shot_time += dt
         prev_pos = pygame.Vector2(self.ball_pos)
+        # Aplica gravidade: acelera a bola para baixo a cada frame.
         self.ball_vel.y += settings.GRAVITY * dt
         self.ball_pos += self.ball_vel * dt
 
-        # Valida cesta antes das colisoes para evitar rejeicao indevida no aro.
+        # A cesta e checada antes das colisoes para nao rejeitar uma entrada valida.
         self._check_made_basket(prev_pos)
         self._resolve_hoop_collisions()
         self._resolve_floor_collision()
@@ -364,16 +369,19 @@ class FreeThrowGame:
         self._update_drag_aim_and_force()
 
     def _update_drag_aim_and_force(self) -> None:
+        # Vetor do ponto de clique ate onde o mouse esta agora.
         drag_vec = self.drag_current_pos - self.ball_pos
         drag_distance = drag_vec.length()
         if drag_distance <= 0.0001:
             return
 
-        # Usa o vetor de arrasto para definir direcao de arremesso.
+        # O angulo de arremesso e o oposto da direcao do arrasto:
+        # arrastar para baixo/esquerda = arremessar para cima/direita.
         dy_up = -drag_vec.y
         angle_deg = math.degrees(math.atan2(dy_up, drag_vec.x))
         self.angle_deg = max(settings.ANGLE_MIN, min(settings.ANGLE_MAX, angle_deg))
 
+        # Quanto maior a distancia do arrasto, maior a forca (limitada ao maximo).
         t = drag_distance / settings.DRAG_MAX_DISTANCE_PX
         t = max(0.0, min(1.0, t))
         self.current_throw_force = (
@@ -402,6 +410,8 @@ class FreeThrowGame:
             self._set_status("Sem tentativas. Pressione N para novo jogo.", settings.COLOR_ACCENT, 2.0)
             return
 
+        # Converte angulo e forca em um vetor de velocidade inicial.
+        # cos = componente horizontal, sin = componente vertical (negativo = para cima).
         angle_rad = math.radians(self.angle_deg)
         self.pending_throw_velocity = pygame.Vector2(
             math.cos(angle_rad) * self.current_throw_force,
@@ -578,6 +588,8 @@ class FreeThrowGame:
         if self.ball_vel.y <= 0:
             return
 
+        # Bola tocou o chao: inverte a velocidade vertical com amortecimento
+        # e aplica atrito horizontal para simular o quique.
         self.ball_pos.y = floor_level
         self.ball_vel.y = -abs(self.ball_vel.y) * settings.FLOOR_BOUNCE
         self.ball_vel.x *= settings.FLOOR_FRICTION
@@ -686,6 +698,8 @@ class FreeThrowGame:
             self._trigger_feedback_flash(settings.COLOR_SUCCESS)
 
     def _should_end_shot(self) -> bool:
+        # Encerra a jogada se passou tempo demais, quicou muito,
+        # ou a bola parou no chao (velocidade baixa o suficiente).
         if not self.ball_in_flight:
             return False
         if self.shot_time >= settings.SHOT_MAX_TIME:
