@@ -66,6 +66,7 @@ class FreeThrowGame:
 
         self.sound_preparation = self._load_sound("assets/sounds/preparation.wav")
         self.sound_success = self._load_sound("assets/sounds/success.wav")
+        self.sound_failure = self._load_sound("assets/sounds/failure.wav")
 
         # Animacao de caminhada (transicao de posicao)
         self.walk_frames = self._load_walk_frames()
@@ -723,6 +724,9 @@ class FreeThrowGame:
 
     def _finalize_shot(self, auto_miss: bool) -> None:
         if auto_miss:
+            if self.sound_preparation is not None:
+                self.sound_preparation.stop()
+            self._play_sound(self.sound_failure)
             if self.at_three_point_line:
                 # Errou da linha de 3: volta para o lance livre com animacao de caminhada.
                 self._set_status("Errou!  →  Lance Livre", settings.COLOR_FAILURE, 1.6)
