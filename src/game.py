@@ -17,6 +17,7 @@ class FreeThrowGame:
 
     def __init__(self) -> None:
         pygame.init()
+        pygame.mixer.init()
         self.screen = pygame.display.set_mode(
             (settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT)
         )
@@ -62,6 +63,9 @@ class FreeThrowGame:
         self.throw_anim_end_index = 0
         self.throw_ball_released = False
         self.pending_throw_velocity = pygame.Vector2(0, 0)
+
+        self.sound_preparation = self._load_sound("assets/sounds/preparation.wav")
+        self.sound_success = self._load_sound("assets/sounds/success.wav")
 
         # Animacao de caminhada (transicao de posicao)
         self.walk_frames = self._load_walk_frames()
@@ -358,6 +362,7 @@ class FreeThrowGame:
         self.current_throw_force = settings.THROW_FORCE_MIN
         self._update_drag_aim_and_force()
         self._sync_ball_to_pose(1)
+        self._play_sound(self.sound_preparation)
 
     def _update_drag_shot(self, mouse_pos: tuple[int, int]) -> None:
         if not self.dragging_shot:
@@ -696,6 +701,9 @@ class FreeThrowGame:
                 self.at_three_point_line = True
                 self._set_status("Cesta!  +1 pt  →  Linha de 3", settings.COLOR_SUCCESS, 1.8)
             self._trigger_feedback_flash(settings.COLOR_SUCCESS)
+            if self.sound_preparation is not None:
+                self.sound_preparation.stop()
+            self._play_sound(self.sound_success)
 
     def _should_end_shot(self) -> bool:
         # Encerra a jogada se passou tempo demais, quicou muito,
@@ -809,6 +817,17 @@ class FreeThrowGame:
             frames.append(frame)
 
         return frames
+
+    def _load_sound(self, path: str) -> pygame.mixer.Sound | None:
+        try:
+            full_path = Path(__file__).resolve().parents[1] / path
+            return pygame.mixer.Sound(str(full_path))
+        except (pygame.error, FileNotFoundError):
+            return None
+
+    def _play_sound(self, sound: pygame.mixer.Sound | None) -> None:
+        if sound is not None:
+            sound.play()
 
     def _start_walk_transition(self) -> None:
         """Inicia a animacao de caminhada da linha de 3 para o lance livre.
