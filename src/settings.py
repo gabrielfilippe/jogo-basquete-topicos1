@@ -50,8 +50,12 @@ WALK_FRAME_DURATION = 0.35 # segundos por frame (4 frames = ~0.52 s por ciclo)
 WALK_TOTAL_DURATION = 2.0   # duracao total da transicao em segundos
 WALK_IMAGE_HEIGHT = 200     # altura dos sprites de running (mesma do throw)
 
+# Imagem da bola
+BALL_IMAGE_PATH = "assets/images/court/bola_basquete.png"
+
 # Parametros de gameplay (parte 1)
 BALL_RADIUS = 12
+BALL_ROTATION_SPEED = 540  # graus/segundo durante o voo
 BALL_START_X = 190
 BALL_START_Y = 430
 GRAVITY = 900.0

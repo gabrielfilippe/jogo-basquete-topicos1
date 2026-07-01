@@ -40,6 +40,8 @@ class FreeThrowGame:
         self.shot_scored = False
         self.shot_time = 0.0
         self.floor_bounces = 0
+        self.ball_was_above_rim = False
+        self.failure_buzzer_played = False
 
         self.angle_deg = settings.ANGLE_DEFAULT
         self.dragging_shot = False
@@ -64,9 +66,12 @@ class FreeThrowGame:
         self.throw_ball_released = False
         self.pending_throw_velocity = pygame.Vector2(0, 0)
 
+        self.ball_rotation = 0.0
+        self.ball_image = self._load_ball_image()
+
         self.sound_preparation = self._load_sound("assets/sounds/preparation.wav")
-        self.sound_success = self._load_sound("assets/sounds/success.wav")
-        self.sound_failure = self._load_sound("assets/sounds/failure.wav")
+        self.sound_success = self._load_sound("assets/sounds/acertou.wav")
+        self.sound_failure = self._load_sound("assets/sounds/errou.wav")
 
         # Animacao de caminhada (transicao de posicao)
         self.walk_frames = self._load_walk_frames()
@@ -316,6 +321,10 @@ class FreeThrowGame:
         if self.walk_active:
             return
 
+        # Rotacao da bola: gira durante o voo.
+        if self.ball_in_flight:
+            self.ball_rotation += settings.BALL_ROTATION_SPEED * dt
+
         if self.dragging_shot and not self.ball_in_flight:
             self._sync_ball_to_pose(1)
 
@@ -333,6 +342,24 @@ class FreeThrowGame:
         self._check_made_basket(prev_pos)
         self._resolve_hoop_collisions()
         self._resolve_floor_collision()
+
+        # Detecta se a bola passou acima do aro (subindo).
+        if self.ball_pos.y < settings.RIM_Y:
+            self.ball_was_above_rim = True
+
+        # Se a bola ja passou acima do aro e esta descendo abaixo dele sem ter
+        # acertado, toca o buzzer de erro imediatamente (sem esperar quicar).
+        if (
+            self.ball_was_above_rim
+            and not self.shot_scored
+            and not self.failure_buzzer_played
+            and self.ball_vel.y >= 0
+            and self.ball_pos.y >= settings.RIM_Y
+        ):
+            if self.sound_preparation is not None:
+                self.sound_preparation.stop()
+            self._play_sound(self.sound_failure)
+            self.failure_buzzer_played = True
 
         if self._should_end_shot():
             self._finalize_shot(auto_miss=not self.shot_scored)
@@ -443,6 +470,9 @@ class FreeThrowGame:
         self.shot_scored = False
         self.shot_time = 0.0
         self.floor_bounces = 0
+        self.ball_was_above_rim = False
+        self.failure_buzzer_played = False
+        self.ball_rotation = 0.0
         self.throw_anim_active = False
         self.throw_anim_time = 0.0
         self.throw_anim_frame_index = 0
@@ -520,6 +550,7 @@ class FreeThrowGame:
 
         self.ball_vel.update(self.pending_throw_velocity)
         self.ball_in_flight = True
+        self.ball_rotation = 0.0
         self.shot_scored = False
         self.shot_time = 0.0
         self.floor_bounces = 0
@@ -724,9 +755,10 @@ class FreeThrowGame:
 
     def _finalize_shot(self, auto_miss: bool) -> None:
         if auto_miss:
-            if self.sound_preparation is not None:
-                self.sound_preparation.stop()
-            self._play_sound(self.sound_failure)
+            if not self.failure_buzzer_played:
+                if self.sound_preparation is not None:
+                    self.sound_preparation.stop()
+                self._play_sound(self.sound_failure)
             if self.at_three_point_line:
                 # Errou da linha de 3: volta para o lance livre com animacao de caminhada.
                 self._set_status("Errou!  →  Lance Livre", settings.COLOR_FAILURE, 1.6)
@@ -822,6 +854,17 @@ class FreeThrowGame:
 
         return frames
 
+    def _load_ball_image(self) -> pygame.Surface | None:
+        path = Path(__file__).resolve().parents[1] / settings.BALL_IMAGE_PATH
+        if not path.exists():
+            return None
+        try:
+            loaded = pygame.image.load(str(path)).convert_alpha()
+            diameter = settings.BALL_RADIUS * 2
+            return pygame.transform.smoothscale(loaded, (diameter, diameter))
+        except pygame.error:
+            return None
+
     def _load_sound(self, path: str) -> pygame.mixer.Sound | None:
         try:
             full_path = Path(__file__).resolve().parents[1] / path
@@ -871,6 +914,9 @@ class FreeThrowGame:
         t_ease = (1.0 - math.cos(t * math.pi)) / 2.0
         self.walk_player_pos.x = self.walk_start_pos.x + (self.walk_target_pos.x - self.walk_start_pos.x) * t_ease
         self.walk_player_pos.y = self.walk_start_pos.y + (self.walk_target_pos.y - self.walk_start_pos.y) * t_ease
+
+        # Bola acompanha o jogador durante a caminhada.
+        self.ball_pos.update(self._get_ball_rest_position())
 
         # Cicla os frames de running enquanto anda.
         frame_count = len(self.walk_frames)
@@ -1263,19 +1309,27 @@ class FreeThrowGame:
         )
 
     def _draw_ball(self) -> None:
-        pygame.draw.circle(
-            self.screen,
-            settings.COLOR_BALL,
-            (int(self.ball_pos.x), int(self.ball_pos.y)),
-            settings.BALL_RADIUS,
-        )
-        pygame.draw.circle(
-            self.screen,
-            settings.COLOR_LINES,
-            (int(self.ball_pos.x), int(self.ball_pos.y)),
-            settings.BALL_RADIUS,
-            width=2,
-        )
+        if self.ball_image is None:
+            pygame.draw.circle(
+                self.screen,
+                settings.COLOR_BALL,
+                (int(self.ball_pos.x), int(self.ball_pos.y)),
+                settings.BALL_RADIUS,
+            )
+            pygame.draw.circle(
+                self.screen,
+                settings.COLOR_LINES,
+                (int(self.ball_pos.x), int(self.ball_pos.y)),
+                settings.BALL_RADIUS,
+                width=2,
+            )
+            return
+
+        img = self.ball_image
+        if self.ball_rotation != 0.0:
+            img = pygame.transform.rotate(img, self.ball_rotation)
+        rect = img.get_rect(center=(int(self.ball_pos.x), int(self.ball_pos.y)))
+        self.screen.blit(img, rect)
 
     def _draw_feedback_flash(self) -> None:
         if self.feedback_flash_timer <= 0.0:
