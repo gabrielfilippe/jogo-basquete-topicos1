@@ -45,11 +45,11 @@ Hoop/backboard pixel coords in `src/settings.py:99-107`. Adjust `RIM_Y`, `RIM_LE
 
 ## Sound system
 
-- `pygame.mixer.init()` at `game.py:20`.
+- `pygame.mixer.init(frequency=44100)` at `game.py:20` — must match WAV sample rate (44.1 kHz). Default (22050 Hz) causes slow/distorted playback.
 - Sounds loaded at `game.py:71-73` via `_load_sound()` (returns `None` if file missing).
 - Play via `_play_sound()` (no-op if `None`).
 - Sound files:
-  - `preparation.wav` — plays on drag start (`game.py:388`); stopped before score/miss sounds.
+  - `preparation.wav` — plays on drag start (`game.py:388`); stopped before score/miss sounds, on drag cancel, and before replaying.
   - `acertou.wav` — Faustão "acertou!", plays on made basket (`game.py:754`).
   - `errou.wav` — Faustão "errou!", plays on early miss detection (ball passes below rim, `game.py:352-354`) with fallback in `_finalize_shot()` (`game.py:776-779`).
 - Early failure buzzer: fires when `ball_was_above_rim` and ball descends past `RIM_Y` without scoring — no need to wait for floor bounces.

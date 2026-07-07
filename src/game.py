@@ -17,7 +17,10 @@ class FreeThrowGame:
 
     def __init__(self) -> None:
         pygame.init()
-        pygame.mixer.init()
+        try:
+            pygame.mixer.init(frequency=44100)
+        except pygame.error:
+            pass
         self.screen = pygame.display.set_mode(
             (settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT)
         )
@@ -390,6 +393,8 @@ class FreeThrowGame:
         self.current_throw_force = settings.THROW_FORCE_MIN
         self._update_drag_aim_and_force()
         self._sync_ball_to_pose(1)
+        if self.sound_preparation is not None:
+            self.sound_preparation.stop()
         self._play_sound(self.sound_preparation)
 
     def _update_drag_shot(self, mouse_pos: tuple[int, int]) -> None:
@@ -461,6 +466,8 @@ class FreeThrowGame:
         self.drag_current_pos.update(self.ball_pos)
         self.current_throw_force = settings.THROW_FORCE_MIN
         self._sync_ball_to_pose(0)
+        if self.sound_preparation is not None:
+            self.sound_preparation.stop()
 
     def _reset_ball(self) -> None:
         self._cancel_drag_shot()

@@ -42,7 +42,7 @@ jogo-basquete-topicos1/
 │   │   ├── player/    # frames de animação do jogador
 │   │   ├── court/     # imagem de fundo da quadra
 │   │   └── ui/        # tela inicial e interface
-│   └── sounds/        # sons (acertou, errou, preparacao)
+│   └── sounds/        # sons .wav 44.1kHz 16-bit stereo
 ├── docs/              # documentação do projeto
 ├── requirements.txt
 └── README.md
