@@ -42,7 +42,7 @@ jogo-basquete-topicos1/
 │   │   ├── player/    # frames de animação do jogador
 │   │   ├── court/     # imagem de fundo da quadra
 │   │   └── ui/        # tela inicial e interface
-│   └── sounds/        # sons (a implementar)
+│   └── sounds/        # sons (acertou, errou, preparacao)
 ├── docs/              # documentação do projeto
 ├── requirements.txt
 └── README.md
@@ -57,5 +57,7 @@ jogo-basquete-topicos1/
 - Detecção de cesta válida (bola descendo por dentro do aro) - Precisa ser refinado. Funciona na maioria das vezes, mas em alguns casos nao reconhece a cesta.
 - Sistema de pontuação alternado: lance livre (1 pt) → linha de 3 (3 pts) - Acertou o lance livre vai para a linha de 3 pontos, errou volta para o lance livre.
 - Limite de 10 tentativas por rodada com tela de resultado final
-- Animação de arremesso por frames
+- Animação de arremesso por frames (5 poses)
+- Animação de caminhada entre linha de 3 e lance livre
+- Sistema de áudio com efeitos sonoros (preparação, acerto, erro)
 - Feedback visual de acerto e erro
