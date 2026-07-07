@@ -11,7 +11,7 @@ O passo a passo completo (com instalação do Python, ambiente virtual, etc.) es
 
 📄 **[docs/tutorial_para_rodar_o_jogo.md](docs/tutorial_para_rodar_o_jogo.md)**
 
-Mas se você já manja dos paranauê, o resumo é:
+Mas se você já manja, o resumo é:
 
 ```bash
 python -m venv .venv               # cria o ambiente virtual

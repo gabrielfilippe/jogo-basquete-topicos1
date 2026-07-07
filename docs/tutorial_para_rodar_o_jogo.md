@@ -35,6 +35,18 @@ Se não tiver, instala com:
 sudo apt install python3 python3-pip python3-venv
 ```
 
+### Pra funcionar o som no Linux
+
+No **Windows** o som já funciona de cara, sem precisar fazer nada extra.
+
+Já no **Linux**, o Pygame precisa de umas bibliotecas de áudio do sistema. Pra garantir que o som vai funcionar:
+
+```bash
+sudo apt install pulseaudio libasound2-dev
+```
+
+Depois disso, o som do jogo (preparação, acertou, errou, batida no aro) deve funcionar normal.
+
 ---
 
 ## Baixar o projeto
@@ -125,13 +137,37 @@ Você esqueceu de ativar o ambiente virtual ou de instalar as dependências. Vol
 
 O Python não foi adicionado ao PATH. Reinstala o Python e marca a opção "Add Python to PATH" dessa vez.
 
-### "dsp: No such audio device" (Linux)
+### "dsp: No such audio device" (Linux — som não funciona)
 
-O jogo não encontrou placa de som. Não esquenta — ele roda normal sem som. É só um aviso.
+Isso acontece quando o Linux não está com nenhum sistema de áudio rodando. Segue o passo a passo:
+
+1. Instala o PulseAudio (o gerenciador de som do Linux):
+   ```bash
+   sudo apt install pulseaudio libasound2-dev
+   ```
+2. Reinicia o PulseAudio:
+   ```bash
+   pulseaudio --start
+   ```
+3. Se ainda assim não funcionar, tenta rodar o jogo com:
+   ```bash
+   SDL_AUDIODRIVER=pulseaudio python3 -m src.main
+   ```
+
+Se nada disso funcionar, o jogo roda normal sem som — você só não vai ouvir os efeitos.
 
 ### "pygame.error: video system not initialized"
 
 Tenta rodar com o ambiente virtual ativado. Se ainda assim der erro, roda no terminal normal (sem ser pelo PowerShell ISE ou VS Code integrado).
+
+### O jogo abre mas não aparece nada / tela preta
+
+No Windows, verifica se o seu Python é 64-bit (roda `python --version` e vê se aparece "64-bit"). O Pygame pode ter problemas com Python 32-bit em algumas máquinas.
+
+No Linux, instala as bibliotecas gráficas do SDL:
+```bash
+sudo apt install libsdl2-dev libsdl2-mixer-dev libsdl2-image-dev libsdl2-ttf-dev
+```
 
 ---
 
@@ -153,3 +189,21 @@ Tenta rodar com o ambiente virtual ativado. Se ainda assim der erro, roda no ter
 4. Você tem **10 tentativas** no total. Quando acabar, aparece sua pontuação final
 
 Boa sorte e divirta-se! 🏀
+
+---
+
+## Dica extra: por que não ouço o som?
+
+O jogo tem 4 efeitos sonoros:
+
+| Quando acontece | O que toca |
+|---|---|
+| Você clica na bola pra mirar | Um som de "preparação" (como se o jogador estivesse se concentrando) |
+| A bola bate no aro | Um "tchimm" de metal |
+| Você acerta a cesta | O Faustão gritando "ACERTOU!" |
+| Você erra | O Faustão gritando "ERROU!" |
+
+Se você não está ouvindo nada, pode ser:
+- **Windows**: normalmente funciona de primeira. Verifica se o volume do sistema não está mudo
+- **Linux**: pode precisar instalar o PulseAudio (olha a seção "Se der problema" ali em cima)
+- **Fone de ouvido**: verifica se tá conectado certo 😄
