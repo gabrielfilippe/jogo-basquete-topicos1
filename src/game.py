@@ -21,8 +21,10 @@ class FreeThrowGame:
             pygame.mixer.init(frequency=44100)
         except pygame.error:
             pass
+        self.is_fullscreen = False
         self.screen = pygame.display.set_mode(
-            (settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT)
+            (settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT),
+            pygame.SCALED,
         )
         pygame.display.set_caption(settings.WINDOW_TITLE)
         self.clock = pygame.time.Clock()
@@ -122,12 +124,21 @@ class FreeThrowGame:
                     self._reset_ball()
                 if event.key == pygame.K_n:
                     self._new_session()
+                if event.key == pygame.K_F11:
+                    self._toggle_fullscreen()
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 self._start_drag_shot(event.pos)
             if event.type == pygame.MOUSEMOTION:
                 self._update_drag_shot(event.pos)
             if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 self._release_drag_shot(event.pos)
+
+    def _toggle_fullscreen(self) -> None:
+        self.is_fullscreen = not self.is_fullscreen
+        flags = pygame.SCALED | (pygame.FULLSCREEN if self.is_fullscreen else 0)
+        self.screen = pygame.display.set_mode(
+            (settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT), flags
+        )
 
     def _show_start_screen(self) -> None:
         """Exibe a tela inicial. Clicar em 'Como Jogar' abre as instrucoes;
@@ -141,9 +152,10 @@ class FreeThrowGame:
                 if event.type == pygame.QUIT:
                     self.running = False
                     waiting_for_player = False
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+                    self._toggle_fullscreen()
                 elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     if self._how_to_play_btn.collidepoint(event.pos):
-                        # Abre tela de instrucoes sem sair da tela inicial.
                         self._show_instructions_screen()
                     else:
                         waiting_for_player = False
@@ -211,6 +223,8 @@ class FreeThrowGame:
                 if event.type == pygame.QUIT:
                     self.running = False
                     waiting = False
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+                    self._toggle_fullscreen()
                 elif event.type in (pygame.KEYUP, pygame.MOUSEBUTTONUP):
                     waiting = False
 
@@ -243,7 +257,7 @@ class FreeThrowGame:
             title_gap
             + section_h + 2 * body_h + gap   # OBJETIVO
             + section_h + 4 * body_h + gap   # CONTROLES
-            + section_h + 2 * body_h          # TECLAS
+            + section_h + 3 * body_h          # TECLAS
         )
         y = (settings.SCREEN_HEIGHT - total_h) // 2
 
@@ -288,6 +302,7 @@ class FreeThrowGame:
         for line in [
             "R — Resetar a posição da bola",
             "N — Iniciar nova partida",
+            "F11 — Alternar tela cheia",
         ]:
             s = self.small_font.render(line, True, settings.COLOR_TEXT)
             self.screen.blit(s, (cx - s.get_width() // 2, y))

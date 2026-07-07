@@ -26,6 +26,7 @@ Consulte o passo a passo detalhado em (docs/tutorial_para_rodar_o_jogo.md).
 | Arremessar | Soltar o botão esquerdo do mouse |
 | Resetar a bola | `R` |
 | Nova partida | `N` |
+| Alternar tela cheia | `F11` |
 
 ---
 
