@@ -21,15 +21,17 @@ class FreeThrowGame:
             pygame.mixer.init(frequency=44100)
         except pygame.error:
             pass
-        self.is_fullscreen = False
+        self.is_fullscreen = True
         self.screen = pygame.display.set_mode(
             (settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT),
-            pygame.SCALED,
+            pygame.FULLSCREEN | pygame.SCALED,
         )
         pygame.display.set_caption(settings.WINDOW_TITLE)
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("consolas", 24)
         self.small_font = pygame.font.SysFont("consolas", 18)
+        self.title_font = pygame.font.SysFont("dejavusans", 52, bold=True)
+        self.subtitle_font = pygame.font.SysFont("dejavusans", 22)
         self.running = True
         self.using_photo_background = False
         self.static_background = self._build_static_background()
@@ -90,7 +92,7 @@ class FreeThrowGame:
         self.walk_player_pos = pygame.Vector2(0, 0)  # posicao interpolada durante a caminhada
 
         # Botao "Como Jogar" no canto inferior direito da tela inicial.
-        btn_w, btn_h = 160, 38
+        btn_w, btn_h = 180, 42
         padding = 20
         self._how_to_play_btn = pygame.Rect(
             settings.SCREEN_WIDTH - btn_w - padding,
@@ -182,29 +184,43 @@ class FreeThrowGame:
         cx = settings.SCREEN_WIDTH // 2
         cy = settings.SCREEN_HEIGHT // 2
 
-        # Titulo principal.
-        # title_surface = self.font.render("BilóHooper", True, settings.COLOR_ACCENT)
-        # self.screen.blit(title_surface, (cx - title_surface.get_width() // 2, cy - 100))
-
-        # # Subtitulo.
-        # sub_surface = self.small_font.render("Lances Livres", True, settings.COLOR_TEXT)
-        # self.screen.blit(sub_surface, (cx - sub_surface.get_width() // 2, cy - 64))
+        # Linha decorativa abaixo do subtitulo.
+        glow = pygame.Surface((120, 4), pygame.SRCALPHA)
+        for i in range(4):
+            alpha = 60 - i * 12
+            pygame.draw.line(glow, (*settings.COLOR_ACCENT, alpha), (i * 2, i), (120 - i * 2, i), 2)
+        self.screen.blit(glow, (cx - 60, cy - 38))
 
         # Prompt de inicio.
         prompt_surface = self.small_font.render(
             "Pressione qualquer tecla ou clique para jogar!",
             True,
-            settings.COLOR_TEXT,
+            (180, 185, 195),
         )
-        self.screen.blit(prompt_surface, (cx - prompt_surface.get_width() // 2, cy - 16))
+        self.screen.blit(prompt_surface, (cx - prompt_surface.get_width() // 2, cy + 4))
 
         # Botao "Como Jogar" no canto inferior direito.
         mouse_pos = pygame.mouse.get_pos()
         btn_hovered = self._how_to_play_btn.collidepoint(mouse_pos)
-        btn_color = settings.COLOR_ACCENT if btn_hovered else (30, 38, 56)
+
+        # Brilho hover.
+        if btn_hovered:
+            hover_glow = pygame.Surface(
+                (self._how_to_play_btn.w + 12, self._how_to_play_btn.h + 12), pygame.SRCALPHA
+            )
+            pygame.draw.rect(
+                hover_glow, (*settings.COLOR_ACCENT, 50),
+                hover_glow.get_rect(), border_radius=12,
+            )
+            self.screen.blit(hover_glow, (self._how_to_play_btn.x - 6, self._how_to_play_btn.y - 6))
+
+        btn_color = settings.COLOR_ACCENT if btn_hovered else (25, 32, 50)
         btn_text_color = (10, 14, 24) if btn_hovered else settings.COLOR_TEXT
-        pygame.draw.rect(self.screen, btn_color, self._how_to_play_btn, border_radius=8)
-        pygame.draw.rect(self.screen, settings.COLOR_ACCENT, self._how_to_play_btn, width=2, border_radius=8)
+        pygame.draw.rect(self.screen, btn_color, self._how_to_play_btn, border_radius=10)
+        pygame.draw.rect(
+            self.screen, settings.COLOR_ACCENT,
+            self._how_to_play_btn, width=2, border_radius=10,
+        )
         btn_label = self.small_font.render("Como jogar", True, btn_text_color)
         self.screen.blit(
             btn_label,
@@ -236,7 +252,6 @@ class FreeThrowGame:
 
     def _draw_instructions_screen(self) -> None:
         """Renderiza o overlay de instrucoes centralizado verticalmente na tela."""
-        # Fundo.
         if self.start_screen_background is not None:
             self.screen.blit(self.start_screen_background, (0, 0))
         else:
@@ -247,68 +262,72 @@ class FreeThrowGame:
         self.screen.blit(overlay, (0, 0))
 
         cx = settings.SCREEN_WIDTH // 2
-        title_gap = 48   # espaco apos o titulo
-        section_h = 28   # altura de cada cabecalho de secao
-        body_h = 24      # altura de cada linha de conteudo
-        gap = 10         # espaco entre secoes
+        section_h = 28
+        body_h = 24
+        gap = 10
+        title_gap = 16
 
-        # Calcula a altura total do bloco para centralizar verticalmente.
+        # Titulo
+        title = self.font.render("Como Jogar", True, settings.COLOR_ACCENT)
+        self.screen.blit(title, (cx - title.get_width() // 2, 52))
+
+        # Glow decorativo
+        pygame.draw.line(self.screen, (*settings.COLOR_ACCENT, 80), (cx - 60, 78), (cx + 60, 78), 2)
+
         total_h = (
             title_gap
-            + section_h + 2 * body_h + gap   # OBJETIVO
-            + section_h + 4 * body_h + gap   # CONTROLES
-            + section_h + 3 * body_h          # TECLAS
+            + section_h + 2 * body_h + gap
+            + section_h + 4 * body_h + gap
+            + section_h + 3 * body_h
         )
-        y = (settings.SCREEN_HEIGHT - total_h) // 2
+        y = (settings.SCREEN_HEIGHT - total_h) // 2 + 20
 
-        # # Titulo da tela.
-        # title = self.font.render("Como Jogar", True, settings.COLOR_ACCENT)
-        # self.screen.blit(title, (cx - title.get_width() // 2, y))
-        # y += title_gap
+        # Painel de fundo das secoes
+        panel_w = 860
+        panel_pad = 16
+        panel_x = cx - panel_w // 2
+        panel_y = y - panel_pad
+        panel_h = total_h + panel_pad * 2
+        panel_bg = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+        pygame.draw.rect(panel_bg, (10, 16, 28, 180), panel_bg.get_rect(), border_radius=14)
+        pygame.draw.rect(panel_bg, (*settings.COLOR_ACCENT, 30), panel_bg.get_rect(), width=1, border_radius=14)
+        self.screen.blit(panel_bg, (panel_x, panel_y))
 
-        # Secao: Objetivo.
-        sec1 = self.small_font.render("OBJETIVO", True, settings.COLOR_ACCENT)
-        self.screen.blit(sec1, (cx - sec1.get_width() // 2, y))
-        y += section_h
-        for line in [
+        def render_section(header: str, lines: list[str]):
+            nonlocal y
+            hdr = self.small_font.render(header, True, settings.COLOR_ACCENT)
+            self.screen.blit(hdr, (cx - hdr.get_width() // 2, y))
+            # underline sutil
+            underline = pygame.Surface((hdr.get_width() + 20, 2), pygame.SRCALPHA)
+            pygame.draw.line(underline, (*settings.COLOR_ACCENT, 60), (0, 0), (underline.get_width(), 0), 2)
+            self.screen.blit(underline, (cx - underline.get_width() // 2, y + section_h - 4))
+            y += section_h
+            for line in lines:
+                s = self.small_font.render(line, True, settings.COLOR_TEXT)
+                self.screen.blit(s, (cx - s.get_width() // 2, y))
+                y += body_h
+
+        render_section("OBJETIVO", [
             "Alterne entre Lance Livre (1pt) e Linha de 3 (3pts).",
             "Acerte o lance livre para avançar à linha de 3!",
-        ]:
-            s = self.small_font.render(line, True, settings.COLOR_TEXT)
-            self.screen.blit(s, (cx - s.get_width() // 2, y))
-            y += body_h
+        ])
         y += gap
 
-        # Secao: Controles.
-        sec2 = self.small_font.render("CONTROLES", True, settings.COLOR_ACCENT)
-        self.screen.blit(sec2, (cx - sec2.get_width() // 2, y))
-        y += section_h
-        for line in [
+        render_section("CONTROLES", [
             "1° - Clique na bola para mirar.",
             "2° - Arraste o mouse para mirar e definir a força.",
             "3° - Solte o botão para arremessar.",
             "   OBS: O final da parabola não indica necessariamente onde a bola vai cair,",
             "        ela serve para auxiliar na mira do arremesso.",
-        ]:
-            s = self.small_font.render(line, True, settings.COLOR_TEXT)
-            self.screen.blit(s, (cx - s.get_width() // 2, y))
-            y += body_h
+        ])
         y += gap
 
-        # Secao: Teclas.
-        sec3 = self.small_font.render("TECLAS DE ATALHO", True, settings.COLOR_ACCENT)
-        self.screen.blit(sec3, (cx - sec3.get_width() // 2, y))
-        y += section_h
-        for line in [
+        render_section("TECLAS DE ATALHO", [
             "R — Resetar a posição da bola",
             "N — Iniciar nova partida",
             "F11 — Alternar tela cheia",
-        ]:
-            s = self.small_font.render(line, True, settings.COLOR_TEXT)
-            self.screen.blit(s, (cx - s.get_width() // 2, y))
-            y += body_h
+        ])
 
-        # Rodape fixo na parte inferior da tela.
         footer = self.small_font.render(
             "Pressione qualquer tecla ou clique para voltar",
             True,
@@ -1416,33 +1435,42 @@ class FreeThrowGame:
         # --- Indicador de posicao atual (canto superior esquerdo) ---
         if self.at_three_point_line:
             position_label = "Linha de 3 Pontos"
-            pos_color = settings.COLOR_TEXT
+            badge_color = settings.COLOR_ACCENT
         else:
-            position_label = "Linha de Lance Livre"
-            pos_color = settings.COLOR_TEXT
-        pos_surface = self.small_font.render(position_label, True, pos_color)
-        self.screen.blit(pos_surface, (pad, pad))
+            position_label = "Lance Livre"
+            badge_color = (100, 180, 255)
+
+        pos_surface = self.small_font.render(position_label, True, settings.COLOR_TEXT)
+        badge_w = pos_surface.get_width() + 50
+        badge_h = 34
+        badge_x = pad
+        badge_y = pad
+        badge_bg = pygame.Surface((badge_w, badge_h), pygame.SRCALPHA)
+        pygame.draw.rect(badge_bg, (8, 14, 22, 170), badge_bg.get_rect(), border_radius=10)
+        pygame.draw.rect(badge_bg, (*badge_color, 80), badge_bg.get_rect(), width=2, border_radius=10)
+        self.screen.blit(badge_bg, (badge_x, badge_y))
+
+        # Bola decorativa no badge
+        ball_size = 10
+        pygame.draw.circle(self.screen, badge_color, (badge_x + 20, badge_y + badge_h // 2), ball_size)
+        pygame.draw.circle(self.screen, (8, 14, 22), (badge_x + 20, badge_y + badge_h // 2), ball_size, width=2)
+
+        self.screen.blit(pos_surface, (badge_x + 34, badge_y + (badge_h - pos_surface.get_height()) // 2))
 
         # --- Placar e tentativas no canto inferior direito ---
         score_text = f"Pontos: {self.score}  |  Arremessos: {self.attempts_used}/{settings.MAX_ATTEMPTS}"
         score_surface = self.small_font.render(score_text, True, settings.COLOR_TEXT)
-        score_x = settings.SCREEN_WIDTH - score_surface.get_width() - pad
-        score_y = settings.SCREEN_HEIGHT - score_surface.get_height() - pad
-
-        # Fundo sutil arredondado atras do placar.
-        _bg_px, _bg_py = 10, 3
-        _score_bg = pygame.Surface(
-            (score_surface.get_width() + _bg_px * 2, score_surface.get_height() + _bg_py * 2),
+        score_pad = 14
+        score_bg = pygame.Surface(
+            (score_surface.get_width() + score_pad * 2, score_surface.get_height() + 10),
             pygame.SRCALPHA,
         )
-        pygame.draw.rect(
-            _score_bg,
-            (8, 14, 22, 140),
-            _score_bg.get_rect(),
-            border_radius=8,
-        )
-        self.screen.blit(_score_bg, (score_x - _bg_px, score_y - _bg_py))
-        self.screen.blit(score_surface, (score_x, score_y))
+        pygame.draw.rect(score_bg, (8, 14, 22, 170), score_bg.get_rect(), border_radius=10)
+        pygame.draw.rect(score_bg, (*settings.COLOR_ACCENT, 50), score_bg.get_rect(), width=1, border_radius=10)
+        score_x = settings.SCREEN_WIDTH - score_bg.get_width() - pad
+        score_y = settings.SCREEN_HEIGHT - score_bg.get_height() - pad
+        self.screen.blit(score_bg, (score_x, score_y))
+        self.screen.blit(score_surface, (score_x + score_pad, score_y + 5))
 
         # Aviso de fim de tentativas centralizado no topo.
         if not self.ball_in_flight and attempts_left == 0:
