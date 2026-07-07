@@ -52,6 +52,7 @@ Hoop/backboard pixel coords in `src/settings.py:99-107`. Adjust `RIM_Y`, `RIM_LE
   - `preparation.wav` — plays on drag start (`game.py:388`); stopped before score/miss sounds, on drag cancel, and before replaying.
   - `acertou.wav` — Faustão "acertou!", plays on made basket (`game.py:754`).
   - `errou.wav` — Faustão "errou!", plays on early miss detection (ball passes below rim, `game.py:352-354`) with fallback in `_finalize_shot()` (`game.py:776-779`).
+  - `som_aro.wav` — rim hit sound, plays on hoop collision (`game.py:660`); 0.15s cooldown to avoid retrigger spam.
 - Early failure buzzer: fires when `ball_was_above_rim` and ball descends past `RIM_Y` without scoring — no need to wait for floor bounces.
 - Trimming silence from WAV: `ffmpeg -i file.wav -ss 00:00.X -t 00:00.Y file_trimmed.wav` (use `python3` with `wave` module to detect silence).
 - `errou.wav` cut at 0.44s (not 0.495s — that clipped the "e" making it sound like "rou").

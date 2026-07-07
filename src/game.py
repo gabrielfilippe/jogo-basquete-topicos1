@@ -75,6 +75,8 @@ class FreeThrowGame:
         self.sound_preparation = self._load_sound("assets/sounds/preparation.wav")
         self.sound_success = self._load_sound("assets/sounds/acertou.wav")
         self.sound_failure = self._load_sound("assets/sounds/errou.wav")
+        self.sound_rim_hit = self._load_sound("assets/sounds/som_aro.wav")
+        self.rim_hit_cooldown = 0.0
 
         # Animacao de caminhada (transicao de posicao)
         self.walk_frames = self._load_walk_frames()
@@ -319,6 +321,7 @@ class FreeThrowGame:
         self._update_feedback_flash_timer(dt)
         self._update_throw_animation(dt)
         self._update_walk_transition(dt)
+        self.rim_hit_cooldown = max(0.0, self.rim_hit_cooldown - dt)
 
         # Se o jogador esta caminhando para outra posicao, pausa tudo.
         if self.walk_active:
@@ -487,6 +490,7 @@ class FreeThrowGame:
         self.throw_anim_end_index = 0
         self.throw_ball_released = False
         self.pending_throw_velocity.update(0, 0)
+        self.rim_hit_cooldown = 0.0
 
     def _new_session(self) -> None:
         self.score = 0
@@ -658,6 +662,9 @@ class FreeThrowGame:
         speed_on_normal = self.ball_vel.dot(normal)
         if speed_on_normal < 0:
             self.ball_vel -= (1.0 + bounce) * speed_on_normal * normal
+            if self.sound_rim_hit is not None and self.rim_hit_cooldown <= 0.0:
+                self.sound_rim_hit.play()
+                self.rim_hit_cooldown = 0.15
 
     def _resolve_backboard_collision(self) -> None:
         board = pygame.Rect(
